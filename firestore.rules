@@ -1,0 +1,10 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 1 writes are server-side only. Development Admin uses Cloud Functions.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

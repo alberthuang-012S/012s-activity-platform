@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>012S Development Admin</title>
+    <link rel="stylesheet" href="/admin/admin.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">2050 × 012S</p>
+          <h1>Development Admin</h1>
+          <p class="subtitle">Phase 1 Mock Customer / Mock Order 資料流測試</p>
+        </div>
+        <span class="environment-badge">Development only</span>
+      </header>
+
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+      <section class="grid two-columns">
+        <article class="card">
+          <h2>建立測試會員</h2>
+          <form id="customer-form">
+            <label>
+              名稱
+              <input id="display-name" name="displayName" required value="測試會員 A" />
+            </label>
+            <label>
+              External Customer ID
+              <input
+                id="external-customer-id"
+                name="externalCustomerId"
+                required
+                value="TEST-CUSTOMER-001"
+              />
+            </label>
+            <button type="submit">建立測試會員</button>
+          </form>
+          <pre id="customer-result" class="result" aria-live="polite"></pre>
+        </article>
+
+        <article class="card">
+          <h2>建立測試訂單</h2>
+          <form id="order-form">
+            <label>
+              External Order ID
+              <input id="external-order-id" name="externalOrderId" required value="TEST-ORDER-001" />
+            </label>
+            <label>
+              會員 External Customer ID
+              <input
+                id="order-customer-id"
+                name="externalCustomerId"
+                required
+                value="TEST-CUSTOMER-001"
+              />
+            </label>
+            <label>
+              訂單狀態
+              <select id="order-status" name="status">
+                <option value="paid" selected>已付款（paid）</option>
+                <option value="pending">待付款（pending）</option>
+                <option value="cancelled">已取消（cancelled）</option>
+                <option value="refunded">已退款（refunded）</option>
+              </select>
+            </label>
+            <div class="form-row">
+              <label>
+                商品 ID
+                <input id="product-id" name="productId" required value="PPA001" />
+              </label>
+              <label>
+                SKU
+                <input id="sku" name="sku" value="PPA+1" />
+              </label>
+            </div>
+            <label>
+              商品名稱
+              <input id="product-name" name="name" required value="PPA+1" />
+            </label>
+            <div class="form-row">
+              <label>
+                數量
+                <input id="quantity" name="quantity" type="number" min="1" step="1" required value="1" />
+              </label>
+              <label>
+                單價（TWD）
+                <input id="unit-price" name="unitPrice" type="number" min="0" step="1" required value="3380" />
+              </label>
+            </div>
+            <div class="form-row">
+              <label>
+                總金額（TWD）
+                <input id="amount" name="amount" type="number" min="0" step="1" required value="3380" />
+              </label>
+              <label>
+                Mock 發票號碼
+                <input id="invoice-number" name="invoiceNumber" value="MOCK-INV-001" />
+              </label>
+            </div>
+            <button type="submit">建立 Mock Order</button>
+          </form>
+          <pre id="order-result" class="result" aria-live="polite"></pre>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>最近訂單</h2>
+            <p>資料來自 Cloud Function → Order Repository → Firestore。</p>
+          </div>
+          <button id="refresh-orders" class="secondary" type="button">重新整理</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>External Order ID</th>
+                <th>User</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Created At</th>
+              </tr>
+            </thead>
+            <tbody id="orders-body">
+              <tr>
+                <td colspan="6" class="empty">尚未載入</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        Phase 1 不包含 Wallet、POINTS、拉霸串接、正式登入或 SHOPLINE integration。
+      </footer>
+    </main>
+    <script src="/admin/admin.js" defer></script>
+  </body>
+</html>

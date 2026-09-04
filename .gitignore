@@ -1,0 +1,12 @@
+node_modules/
+functions/lib/
+functions/.env
+functions/.env.*
+!.env.example
+functions/pnpm-workspace.yaml
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+.pnpm-store/
+firestore-debug.log
+ui-debug.log
