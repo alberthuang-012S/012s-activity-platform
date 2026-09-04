@@ -12,12 +12,70 @@
         <div>
           <p class="eyebrow">2050 × 012S</p>
           <h1>Development Admin</h1>
-          <p class="subtitle">Phase 1 Mock Customer / Mock Order 資料流測試</p>
+          <p class="subtitle">Phase 2A Campaign / Activity Engine / Wallet 測試</p>
         </div>
         <span class="environment-badge">Development only</span>
       </header>
 
       <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Campaign Management</h2>
+            <p>先建立 draft，再啟用活動。啟用後規則不可修改。</p>
+          </div>
+          <button id="refresh-campaigns" class="secondary" type="button">重新整理</button>
+        </div>
+        <form id="campaign-form">
+          <label>
+            活動名稱
+            <input id="campaign-name" required value="2026 測試消費活動" />
+          </label>
+          <div class="form-row">
+            <label>
+              開始時間（Asia/Taipei）
+              <input id="campaign-starts-at" type="datetime-local" required value="2026-09-01T00:00" />
+            </label>
+            <label>
+              結束時間（Asia/Taipei）
+              <input id="campaign-ends-at" type="datetime-local" required value="2026-12-31T23:59" />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              每滿多少元
+              <input id="campaign-threshold" type="number" min="1" step="1" required value="1000" />
+            </label>
+            <label>
+              SLOT_SPIN 增加
+              <input id="campaign-slot-grant" type="number" min="1" step="1" required value="1" />
+            </label>
+            <label>
+              INVOICE_DRAW 增加
+              <input id="campaign-invoice-grant" type="number" min="1" step="1" required value="1" />
+            </label>
+          </div>
+          <button type="submit">建立 Campaign（draft）</button>
+        </form>
+        <pre id="campaign-result" class="result" aria-live="polite"></pre>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Campaign</th>
+                <th>期間</th>
+                <th>Status</th>
+                <th>Rules</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="campaigns-body">
+              <tr><td colspan="5" class="empty">尚未載入</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="grid two-columns">
         <article class="card">
@@ -29,18 +87,31 @@
             </label>
             <label>
               External Customer ID
-              <input
-                id="external-customer-id"
-                name="externalCustomerId"
-                required
-                value="TEST-CUSTOMER-001"
-              />
+              <input id="external-customer-id" name="externalCustomerId" required value="TEST-CUSTOMER-001" />
             </label>
             <button type="submit">建立測試會員</button>
           </form>
           <pre id="customer-result" class="result" aria-live="polite"></pre>
         </article>
 
+        <article class="card">
+          <h2>Development Session / Wallet</h2>
+          <form id="session-form">
+            <label>
+              User ID
+              <input id="session-user-id" required placeholder="USR_..." />
+            </label>
+            <button type="submit">建立 Development Session</button>
+          </form>
+          <pre id="session-result" class="result" aria-live="polite"></pre>
+          <div class="inline-actions">
+            <button id="load-wallet" class="secondary" type="button">GET /api/me/wallet</button>
+          </div>
+          <pre id="wallet-result" class="result" aria-live="polite"></pre>
+        </article>
+      </section>
+
+      <section class="grid two-columns">
         <article class="card">
           <h2>建立測試訂單</h2>
           <form id="order-form">
@@ -50,12 +121,7 @@
             </label>
             <label>
               會員 External Customer ID
-              <input
-                id="order-customer-id"
-                name="externalCustomerId"
-                required
-                value="TEST-CUSTOMER-001"
-              />
+              <input id="order-customer-id" name="externalCustomerId" required value="TEST-CUSTOMER-001" />
             </label>
             <label>
               訂單狀態
@@ -104,13 +170,25 @@
           </form>
           <pre id="order-result" class="result" aria-live="polite"></pre>
         </article>
+
+        <article class="card">
+          <h2>會員 Wallet / Activity Ledger</h2>
+          <form id="profile-form">
+            <label>
+              User ID
+              <input id="profile-user-id" required placeholder="USR_..." />
+            </label>
+            <button type="submit">查看會員活動資料</button>
+          </form>
+          <pre id="profile-result" class="result" aria-live="polite"></pre>
+        </article>
       </section>
 
       <section class="card">
         <div class="section-heading">
           <div>
             <h2>最近訂單</h2>
-            <p>資料來自 Cloud Function → Order Repository → Firestore。</p>
+            <p>資料來自 Cloud Function → Order Processor → Activity Engine → Firestore。</p>
           </div>
           <button id="refresh-orders" class="secondary" type="button">重新整理</button>
         </div>
@@ -124,19 +202,33 @@
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Created At</th>
+                <th>Activity</th>
               </tr>
             </thead>
             <tbody id="orders-body">
-              <tr>
-                <td colspan="6" class="empty">尚未載入</td>
-              </tr>
+              <tr><td colspan="7" class="empty">尚未載入</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
+      <section class="card">
+        <h2>Order Activity Detail</h2>
+        <form id="order-detail-form">
+          <label>
+            Order ID
+            <input id="detail-order-id" required placeholder="ORD_..." />
+          </label>
+          <div class="inline-actions">
+            <button type="submit">查看 Order Activity</button>
+            <button id="reprocess-activity" class="secondary" type="button">重新處理 Activity</button>
+          </div>
+        </form>
+        <pre id="order-detail-result" class="result" aria-live="polite"></pre>
+      </section>
+
       <footer>
-        Phase 1 不包含 Wallet、POINTS、拉霸串接、正式登入或 SHOPLINE integration。
+        Phase 2A 只驗證 Campaign、Activity Engine、Entitlement、Ledger、Wallet 與 Development Session；未包含 Slot Backend、POINTS 遊戲邏輯或 SHOPLINE。
       </footer>
     </main>
     <script src="/admin/admin.js" defer></script>

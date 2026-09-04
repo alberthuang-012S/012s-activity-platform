@@ -24,6 +24,7 @@ import {
   StoredOrder
 } from "../domain/order/order.types";
 import { MockCommerceAdapter } from "../integrations/commerce/mock/mockCommerceAdapter";
+import { ActivityEngine, ActivityProcessResult } from "./activityEngine";
 
 class InMemoryCustomerRepository implements CustomerRepositoryPort {
   readonly users = new Map<string, User>();
@@ -150,7 +151,7 @@ class InMemoryIntegrationEventRepository implements IntegrationEventRepositoryPo
   }
 }
 
-function buildDependencies() {
+function buildDependencies(activityEngine?: ActivityEngine) {
   const customerRepository = new InMemoryCustomerRepository();
   const orderRepository = new InMemoryOrderRepository();
   const integrationEventRepository = new InMemoryIntegrationEventRepository();
@@ -162,7 +163,8 @@ function buildDependencies() {
     orderProcessor: new OrderProcessor({
       customerRepository,
       orderRepository,
-      integrationEventRepository
+      integrationEventRepository,
+      activityEngine
     })
   };
 }
@@ -249,6 +251,39 @@ describe("Phase 1 order flow", () => {
       status: "ignored",
       error: { code: "DUPLICATE_ORDER" }
     });
+  });
+
+  it("runs Activity Engine only for a newly created paid order", async () => {
+    let calls = 0;
+    const activityEngine: ActivityEngine = {
+      async processOrder(order): Promise<ActivityProcessResult> {
+        calls += 1;
+        return {
+          success: true,
+          ignored: false,
+          orderId: order.id,
+          processedCampaigns: []
+        };
+      }
+    };
+    const dependencies = buildDependencies(activityEngine);
+    await dependencies.customerService.createCustomer({
+      displayName: "測試會員 A",
+      externalCustomerId: "TEST-CUSTOMER-001"
+    });
+    const normalized = validNormalizedOrder("TEST-ORDER-002");
+
+    await dependencies.orderProcessor.processOrder(normalized, {
+      ...context,
+      externalOrderId: "TEST-ORDER-002"
+    });
+    await dependencies.orderProcessor.processOrder(normalized, {
+      ...context,
+      externalOrderId: "TEST-ORDER-002",
+      externalEventId: "MOCK-EVENT-002"
+    });
+
+    expect(calls).toBe(1);
   });
 
   it("rejects an order when the external customer does not exist", async () => {

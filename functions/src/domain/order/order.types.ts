@@ -45,6 +45,8 @@ export interface StoredOrder extends NormalizedOrder {
   updatedAt: string;
 }
 
+export type Order = StoredOrder;
+
 export type IntegrationEventStatus =
   | "received"
   | "processing"

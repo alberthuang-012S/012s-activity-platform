@@ -14,6 +14,7 @@ export interface OrderRepositoryPort {
     normalizedOrder: NormalizedOrder,
     userId: string
   ): Promise<CreateOrderIfNotExistsResult>;
+  getOrder?(orderId: string): Promise<StoredOrder | null>;
   listRecentOrders(limit?: number): Promise<StoredOrder[]>;
   listOrdersForUser(userId: string, limit?: number): Promise<StoredOrder[]>;
 }
@@ -87,6 +88,11 @@ export class OrderRepository implements OrderRepositoryPort {
       .limit(safeLimit)
       .get();
     return snapshot.docs.map((document) => document.data() as StoredOrder);
+  }
+
+  async getOrder(orderId: string): Promise<StoredOrder | null> {
+    const snapshot = await this.db.collection("orders").doc(orderId).get();
+    return snapshot.exists ? (snapshot.data() as StoredOrder) : null;
   }
 
   async listOrdersForUser(userId: string, limit = 100): Promise<StoredOrder[]> {

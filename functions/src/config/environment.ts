@@ -5,10 +5,37 @@ export interface RuntimeConfig {
   firebaseProjectId?: string;
   devAdminEnabled: boolean;
   functionsRegion: string;
+  devSessionTtlMinutes: number;
+  corsAllowedOrigins: string[];
 }
+
+const DEFAULT_DEV_CORS_ORIGINS = [
+  "http://localhost:5000",
+  "http://127.0.0.1:5000",
+  "http://localhost:5001",
+  "http://127.0.0.1:5001"
+];
 
 function parseEnvironment(value: string | undefined): AppEnvironment {
   return value === "production" ? "production" : "development";
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseOrigins(value: string | undefined, appEnvironment: AppEnvironment): string[] {
+  const configured = value
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  if (configured && configured.length > 0) {
+    return [...new Set(configured)];
+  }
+
+  return appEnvironment === "development" ? DEFAULT_DEV_CORS_ORIGINS : [];
 }
 
 export function getRuntimeConfig(
@@ -16,13 +43,13 @@ export function getRuntimeConfig(
 ): RuntimeConfig {
   const appEnvironment = parseEnvironment(environment.APP_ENV);
   const explicitlyDisabled = environment.DEV_ADMIN_ENABLED === "false";
-  const explicitlyEnabled = environment.DEV_ADMIN_ENABLED === "true";
 
   return {
     environment: appEnvironment,
     firebaseProjectId: environment.FIREBASE_PROJECT_ID?.trim() || undefined,
-    devAdminEnabled:
-      explicitlyEnabled || (!explicitlyDisabled && appEnvironment === "development"),
-    functionsRegion: environment.FUNCTIONS_REGION?.trim() || "asia-east1"
+    devAdminEnabled: appEnvironment === "development" && !explicitlyDisabled,
+    functionsRegion: environment.FUNCTIONS_REGION?.trim() || "asia-east1",
+    devSessionTtlMinutes: parsePositiveInteger(environment.DEV_SESSION_TTL_MINUTES, 480),
+    corsAllowedOrigins: parseOrigins(environment.CORS_ALLOWED_ORIGINS, appEnvironment)
   };
 }

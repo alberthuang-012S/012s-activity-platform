@@ -21,6 +21,7 @@ import {
 import { OrderRepositoryPort } from "../repositories/orderRepository";
 import { nowIso } from "../utils/dates";
 import { createPrefixedId } from "../utils/ids";
+import { ActivityEngine } from "./activityEngine";
 
 export interface ProcessOrderError {
   code: string;
@@ -39,6 +40,7 @@ export interface OrderProcessorDependencies {
   customerRepository: CustomerRepositoryPort;
   orderRepository: OrderRepositoryPort;
   integrationEventRepository: IntegrationEventRepositoryPort;
+  activityEngine?: ActivityEngine;
 }
 
 function eventError(error: ApplicationError): IntegrationEventError {
@@ -99,6 +101,8 @@ export class OrderProcessor {
   ): Promise<ProcessOrderResult> {
     let event: IntegrationEvent | null = null;
     let externalOrderId = context.externalOrderId;
+    let persistedOrderId: string | undefined;
+    let persistedUserId: string | undefined;
 
     try {
       const source = safeStringProperty(normalizedOrder, "source", context.provider);
@@ -138,6 +142,8 @@ export class OrderProcessor {
         normalizedOrder,
         user.id
       );
+      persistedOrderId = persisted.order.id;
+      persistedUserId = persisted.order.userId;
 
       if (persisted.duplicated) {
         const duplicate = new ApplicationError(
@@ -167,6 +173,21 @@ export class OrderProcessor {
         };
       }
 
+      let activityCampaignCount = 0;
+      if (
+        this.dependencies.activityEngine &&
+        normalizedOrder.status === "paid"
+      ) {
+        const activityResult = await this.dependencies.activityEngine.processOrder(persisted.order);
+        activityCampaignCount = activityResult.processedCampaigns.length;
+        if (!activityResult.success) {
+          throw new ApplicationError(
+            "ACTIVITY_PROCESSING_FAILED",
+            "Activity processing failed."
+          );
+        }
+      }
+
       await this.dependencies.integrationEventRepository.updateStatus(
         event.id,
         "processed",
@@ -178,7 +199,8 @@ export class OrderProcessor {
         externalOrderId,
         orderId: persisted.order.id,
         userId: user.id,
-        eventId: event.id
+        eventId: event.id,
+        activityCampaignCount
       });
 
       // Phase 2: await activityEngine.processOrder(persisted.order);
@@ -221,6 +243,8 @@ export class OrderProcessor {
       });
       return {
         success: false,
+        orderId: persistedOrderId,
+        userId: persistedUserId,
         duplicated: false,
         error: resultError(applicationError)
       };
