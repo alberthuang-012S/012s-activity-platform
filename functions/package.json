@@ -1,7 +1,7 @@
 {
   "name": "012s-activity-platform-functions",
   "private": true,
-  "description": "Phase 1 and Phase 2A backend for the 2050 x 012S member activity platform.",
+  "description": "Phase 1, Phase 2A, and Phase 2B backend for the 2050 x 012S member activity platform.",
   "main": "lib/index.js",
   "engines": {
     "node": "20"

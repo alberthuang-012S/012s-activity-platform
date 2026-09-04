@@ -12,6 +12,7 @@ import { IntegrationEventRepository } from "./repositories/integrationEventRepos
 import { OrderRepository } from "./repositories/orderRepository";
 import { SessionRepository } from "./repositories/sessionRepository";
 import { WalletRepository } from "./repositories/walletRepository";
+import { GameResultRepository } from "./repositories/gameResultRepository";
 import { createActivityEngine } from "./services/activityEngine";
 import { ActivityQueryService } from "./services/activityQueryService";
 import { CampaignService } from "./services/campaignService";
@@ -19,6 +20,7 @@ import { CustomerService } from "./services/customerService";
 import { createOrderProcessor } from "./services/orderProcessor";
 import { SessionService } from "./services/sessionService";
 import { WalletService } from "./services/walletService";
+import { createSlotGameService } from "./services/slotGameService";
 import { MockCommerceAdapter } from "./integrations/commerce/mock/mockCommerceAdapter";
 
 const runtimeConfig = getRuntimeConfig();
@@ -36,11 +38,13 @@ const activityProcessRepository = new ActivityProcessRepository(database);
 const entitlementRepository = new EntitlementRepository(database);
 const activityLedgerRepository = new ActivityLedgerRepository(database);
 const walletRepository = new WalletRepository(database);
+const gameResultRepository = new GameResultRepository(database);
 const activityEngine = createActivityEngine({
   campaignRepository,
   activityProcessRepository
 });
 const walletService = new WalletService(walletRepository, customerRepository);
+const slotGameService = createSlotGameService({ gameResultRepository });
 const campaignService = new CampaignService(campaignRepository);
 const sessionRepository = new SessionRepository(database);
 const sessionService = new SessionService(
@@ -80,6 +84,7 @@ export const api = onRequest(
     campaignService,
     sessionService,
     walletService,
+    slotGameService,
     devAdminEnabled: runtimeConfig.devAdminEnabled,
     devSessionEnabled: runtimeConfig.devAdminEnabled,
     allowedOrigins: runtimeConfig.corsAllowedOrigins

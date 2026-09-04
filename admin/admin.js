@@ -4,6 +4,7 @@ const campaignsBody = document.querySelector("#campaigns-body");
 const customerResult = document.querySelector("#customer-result");
 const sessionResult = document.querySelector("#session-result");
 const walletResult = document.querySelector("#wallet-result");
+const slotTestResult = document.querySelector("#slot-test-result");
 const orderResult = document.querySelector("#order-result");
 const profileResult = document.querySelector("#profile-result");
 const ordersBody = document.querySelector("#orders-body");
@@ -20,9 +21,10 @@ function showResult(element, value) {
 }
 
 async function requestJson(path, options = {}) {
+  const { headers: optionHeaders = {}, ...requestOptions } = options;
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options
+    ...requestOptions,
+    headers: { "Content-Type": "application/json", ...optionHeaders }
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.success === false) {
@@ -243,6 +245,31 @@ document.querySelector("#load-wallet").addEventListener("click", async () => {
     setNotice("Wallet 已載入。");
   } catch (error) {
     showRequestError(walletResult, error);
+  }
+});
+
+document.querySelector("#slot-test-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!devSessionToken) {
+    setNotice("請先建立 Development Session。", true);
+    return;
+  }
+  try {
+    if (!window.crypto || typeof window.crypto.randomUUID !== "function") {
+      throw new Error("此瀏覽器無法建立安全的 Idempotency-Key。");
+    }
+    const body = await requestJson("/api/games/slot/spin", {
+      method: "POST",
+      body: "{}",
+      headers: {
+        Authorization: `Bearer ${devSessionToken}`,
+        "Idempotency-Key": window.crypto.randomUUID()
+      }
+    });
+    showResult(slotTestResult, { success: true, data: body });
+    setNotice("Slot Backend 測試成功，結果由 Server 決定。");
+  } catch (error) {
+    showRequestError(slotTestResult, error);
   }
 });
 

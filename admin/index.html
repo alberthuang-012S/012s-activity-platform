@@ -12,7 +12,7 @@
         <div>
           <p class="eyebrow">2050 × 012S</p>
           <h1>Development Admin</h1>
-          <p class="subtitle">Phase 2A Campaign / Activity Engine / Wallet 測試</p>
+          <p class="subtitle">Phase 2B Activity Engine / Wallet / Slot Backend 測試</p>
         </div>
         <span class="environment-badge">Development only</span>
       </header>
@@ -109,6 +109,15 @@
           </div>
           <pre id="wallet-result" class="result" aria-live="polite"></pre>
         </article>
+      </section>
+
+      <section class="card">
+        <h2>Slot Backend Test</h2>
+        <p class="section-copy">使用目前 Development Session 呼叫 Server-side weighted random Slot API。</p>
+        <form id="slot-test-form">
+          <button type="submit">POST /api/games/slot/spin</button>
+        </form>
+        <pre id="slot-test-result" class="result" aria-live="polite"></pre>
       </section>
 
       <section class="grid two-columns">
@@ -228,7 +237,7 @@
       </section>
 
       <footer>
-        Phase 2A 只驗證 Campaign、Activity Engine、Entitlement、Ledger、Wallet 與 Development Session；未包含 Slot Backend、POINTS 遊戲邏輯或 SHOPLINE。
+        Phase 2B Development Admin 可驗證 Campaign、Activity Engine、Wallet、Development Session 與 Slot Backend；不包含 SHOPLINE、退款回收或其他遊戲。
       </footer>
     </main>
     <script src="/admin/admin.js" defer></script>

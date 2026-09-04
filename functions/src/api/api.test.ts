@@ -3,13 +3,28 @@ import { Request, Response } from "express";
 import { createApiHandler } from "./api";
 import { SessionService } from "../services/sessionService";
 import { WalletService } from "../services/walletService";
+import { SlotGameService } from "../services/slotGameService";
 
-function requestFor(path: string, authorization?: string): Request {
+function requestFor(
+  path: string,
+  authorization?: string,
+  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
+): Request {
+  const headers = Object.fromEntries(
+    Object.entries(options.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value])
+  );
   return {
-    method: "GET",
+    method: options.method ?? "GET",
     path,
     url: path,
-    get: (header: string) => (header.toLowerCase() === "authorization" ? authorization : undefined)
+    body: options.body,
+    get: (header: string) => {
+      const normalizedHeader = header.toLowerCase();
+      if (normalizedHeader === "authorization") {
+        return authorization;
+      }
+      return headers[normalizedHeader];
+    }
   } as unknown as Request;
 }
 
@@ -47,6 +62,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     campaignService: {} as never,
     sessionService: {} as SessionService,
     walletService: {} as WalletService,
+    slotGameService: {} as SlotGameService,
     devAdminEnabled: false,
     devSessionEnabled: true,
     allowedOrigins: ["http://localhost:5000"],
@@ -96,5 +112,68 @@ describe("API Phase 2A routes", () => {
       success: false,
       error: { code: "DEV_ADMIN_DISABLED" }
     });
+  });
+
+  it("routes an authenticated slot spin through the shared actor resolver", async () => {
+    const sessionService = {
+      resolveActor: vi.fn().mockResolvedValue({ userId: "USR_001", sessionId: "SES_001" })
+    } as unknown as SessionService;
+    const slotGameService = {
+      spin: vi.fn().mockResolvedValue({
+        spinId: "SPIN_001",
+        result: ["nne", "nne", "ppa"],
+        reward: { type: "double", points: 10 },
+        dailyMissionBonus: 5,
+        balances: { SLOT_SPIN: 2, POINTS: 15 }
+      })
+    } as unknown as SlotGameService;
+    const handler = createApiHandler(
+      dependencies({ sessionService, slotGameService, devSessionEnabled: true })
+    );
+    const response = responseMock();
+    const idempotencyKey = "11111111-1111-4111-8111-111111111111";
+
+    await handler(
+      requestFor("/api/games/slot/spin", "Bearer SESSION_TOKEN", {
+        method: "POST",
+        body: {},
+        headers: { "Idempotency-Key": idempotencyKey }
+      }),
+      response
+    );
+
+    expect(sessionService.resolveActor).toHaveBeenCalledWith("Bearer SESSION_TOKEN");
+    expect(slotGameService.spin).toHaveBeenCalledWith(
+      { userId: "USR_001", sessionId: "SES_001" },
+      idempotencyKey
+    );
+    expect(response.body).toMatchObject({ success: true, data: { spinId: "SPIN_001" } });
+  });
+
+  it("rejects client-supplied slot results before calling the game service", async () => {
+    const sessionService = {
+      resolveActor: vi.fn().mockResolvedValue({ userId: "USR_001", sessionId: "SES_001" })
+    } as unknown as SessionService;
+    const slotGameService = { spin: vi.fn() } as unknown as SlotGameService;
+    const handler = createApiHandler(
+      dependencies({ sessionService, slotGameService, devSessionEnabled: true })
+    );
+    const response = responseMock();
+
+    await handler(
+      requestFor("/api/games/slot/spin", "Bearer SESSION_TOKEN", {
+        method: "POST",
+        body: { result: ["gift", "gift", "gift"] },
+        headers: { "Idempotency-Key": "11111111-1111-4111-8111-111111111111" }
+      }),
+      response
+    );
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: { code: "INVALID_SLOT_REQUEST" }
+    });
+    expect(slotGameService.spin).not.toHaveBeenCalled();
   });
 });

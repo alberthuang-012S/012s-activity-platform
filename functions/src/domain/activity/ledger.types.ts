@@ -1,7 +1,11 @@
 import { ActivityBalanceType } from "./activity.types";
 
-export type ActivityLedgerReason = "ORDER_ACTIVITY";
-export type ActivityLedgerSourceType = "ORDER";
+export type ActivityLedgerReason =
+  | "ORDER_ACTIVITY"
+  | "SLOT_PLAY"
+  | "SLOT_REWARD"
+  | "DAILY_MISSION";
+export type ActivityLedgerSourceType = "ORDER" | "GAME_RESULT";
 
 export interface ActivityLedgerEntry {
   id: string;
@@ -12,7 +16,7 @@ export interface ActivityLedgerEntry {
   reason: ActivityLedgerReason;
   sourceType: ActivityLedgerSourceType;
   sourceId: string;
-  campaignId: string;
-  ruleId: string;
+  campaignId: string | null;
+  ruleId: string | null;
   createdAt: string;
 }

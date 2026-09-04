@@ -75,7 +75,9 @@ export class ActivityQueryService {
     const campaignIds = new Set([
       ...entitlements.map((entitlement) => entitlement.campaignId),
       ...activityProcesses.map((process) => process.campaignId),
-      ...ledger.map((entry) => entry.campaignId)
+      ...ledger
+        .map((entry) => entry.campaignId)
+        .filter((campaignId): campaignId is string => campaignId !== null)
     ]);
     const campaigns = (
       await Promise.all([...campaignIds].map((campaignId) => this.campaignRepository.getCampaign(campaignId)))

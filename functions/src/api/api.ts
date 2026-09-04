@@ -25,6 +25,8 @@ import { getMockOrders } from "./dev/getMockOrders";
 import { listMockCustomers } from "./dev/listMockCustomers";
 import { reprocessOrderActivity } from "./dev/reprocessActivity";
 import { getMyWallet } from "./me/getWallet";
+import { spinSlot } from "./games/slot/spin";
+import { SlotGameService } from "../services/slotGameService";
 import { sendError } from "./response";
 
 export interface ApiDependencies {
@@ -37,6 +39,7 @@ export interface ApiDependencies {
   campaignService: CampaignService;
   sessionService: SessionService;
   walletService: WalletService;
+  slotGameService: SlotGameService;
   devAdminEnabled: boolean;
   devSessionEnabled: boolean;
   allowedOrigins: string[];
@@ -71,6 +74,23 @@ export function createApiHandler(dependencies: ApiDependencies) {
         return;
       }
       await getMyWallet(request, response, dependencies.sessionService, dependencies.walletService);
+      return;
+    }
+
+    if (request.method === "POST" && path === "/games/slot/spin") {
+      if (!dependencies.devSessionEnabled) {
+        sendError(
+          response,
+          new ApplicationError("DEV_ADMIN_DISABLED", "Development session is disabled.")
+        );
+        return;
+      }
+      await spinSlot(
+        request,
+        response,
+        dependencies.sessionService,
+        dependencies.slotGameService
+      );
       return;
     }
 
