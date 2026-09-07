@@ -4,6 +4,7 @@ import { createApiHandler } from "./api";
 import { SessionService } from "../services/sessionService";
 import { WalletService } from "../services/walletService";
 import { SlotGameService } from "../services/slotGameService";
+import { InvoiceDrawService } from "../services/invoiceDrawService";
 
 function requestFor(
   path: string,
@@ -63,6 +64,10 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     sessionService: {} as SessionService,
     walletService: {} as WalletService,
     slotGameService: {} as SlotGameService,
+    invoiceDrawCampaignService: {} as never,
+    invoiceDrawService: {} as InvoiceDrawService,
+    invoiceDrawQueryService: {} as never,
+    prizeClaimService: {} as never,
     devAdminEnabled: false,
     devSessionEnabled: true,
     allowedOrigins: ["http://localhost:5000"],
@@ -175,5 +180,78 @@ describe("API Phase 2A routes", () => {
       error: { code: "INVALID_SLOT_REQUEST" }
     });
     expect(slotGameService.spin).not.toHaveBeenCalled();
+  });
+
+  it("routes invoice draw through the shared actor resolver and idempotency key", async () => {
+    const sessionService = {
+      resolveActor: vi.fn().mockResolvedValue({ userId: "USR_001", sessionId: "SES_001" })
+    } as unknown as SessionService;
+    const invoiceDrawServiceMock = {
+      draw: vi.fn().mockResolvedValue({
+        drawId: "IDRAW_001",
+        campaignId: "IDCAM_001",
+        prize: { prizeId: "PRIZE_001", code: "NONE", displayName: "No prize", rewardKind: "NONE", points: 0, stockMode: "UNLIMITED" },
+        won: false,
+        claim: null,
+        balances: { INVOICE_DRAW: 0, POINTS: 0 },
+        createdAt: "2026-09-04T10:00:00.000Z"
+      })
+    };
+    const handler = createApiHandler(
+      dependencies({
+        sessionService,
+        invoiceDrawService: invoiceDrawServiceMock as unknown as InvoiceDrawService,
+        devSessionEnabled: true
+      })
+    );
+    const response = responseMock();
+    const idempotencyKey = "11111111-1111-4111-8111-111111111111";
+
+    await handler(
+      requestFor("/api/games/invoice-draw/draw", "Bearer SESSION_TOKEN", {
+        method: "POST",
+        body: {},
+        headers: { "Idempotency-Key": idempotencyKey }
+      }),
+      response
+    );
+
+    expect(sessionService.resolveActor).toHaveBeenCalledWith("Bearer SESSION_TOKEN");
+    expect(invoiceDrawServiceMock.draw).toHaveBeenCalledWith(
+      { userId: "USR_001", sessionId: "SES_001" },
+      idempotencyKey
+    );
+    expect(response.body).toMatchObject({ success: true, data: { drawId: "IDRAW_001" } });
+  });
+
+  it("rejects client-supplied invoice draw fields before drawing", async () => {
+    const sessionService = {
+      resolveActor: vi.fn().mockResolvedValue({ userId: "USR_001", sessionId: "SES_001" })
+    } as unknown as SessionService;
+    const invoiceDrawServiceMock = { draw: vi.fn() };
+    const handler = createApiHandler(
+      dependencies({
+        sessionService,
+        invoiceDrawService: invoiceDrawServiceMock as unknown as InvoiceDrawService,
+        devSessionEnabled: true
+      })
+    );
+    const response = responseMock();
+
+    await handler(
+      requestFor("/api/games/invoice-draw/draw", "Bearer SESSION_TOKEN", {
+        method: "POST",
+        body: { prizeId: "PRIZE_CLIENT_SELECTED" },
+        headers: { "Idempotency-Key": "11111111-1111-4111-8111-111111111111" }
+      }),
+      response
+    );
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatchObject({
+      success: false,
+      error: { code: "INVALID_INVOICE_DRAW_REQUEST" }
+    });
+    expect(invoiceDrawServiceMock.draw).not.toHaveBeenCalled();
   });
 });

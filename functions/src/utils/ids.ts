@@ -12,7 +12,11 @@ export type EntityIdPrefix =
   | "LEDGER"
   | "WAL"
   | "SES"
-  | "SPIN";
+  | "SPIN"
+  | "IDCAM"
+  | "PRIZE"
+  | "IDRAW"
+  | "CLAIM";
 
 export function createPrefixedId(prefix: EntityIdPrefix): string {
   return `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;

@@ -1,6 +1,6 @@
 # 2050 × 012S 會員活動平台
 
-這個 Repository 是 2050 × 012S 會員活動平台主專案，基於 Firebase Cloud Functions 2nd Gen、TypeScript 與 Cloud Firestore。Phase 1、Phase 2A 與 Phase 2B 的核心後端目前都在這裡；既有 `012s-slot-game` 維持為獨立 Repository，不複製進本專案。
+這個 Repository 是 2050 × 012S 會員活動平台主專案，基於 Firebase Cloud Functions 2nd Gen、TypeScript 與 Cloud Firestore。Phase 1、Phase 2A、Phase 2B 與 Phase 3A 的核心後端目前都在這裡；既有 `012s-slot-game` 維持為獨立 Repository，不複製進本專案。
 
 ## Architecture
 
@@ -26,6 +26,14 @@ Server weighted random + reward calculation
 SLOT_SPIN -1 + POINTS reward + optional daily bonus
   ↓
 Game Result + Activity Ledger + Wallet
+
+Invoice Draw Campaign
+  ↓ immutable prize-pool snapshot
+POST /api/games/invoice-draw/draw
+  ↓ one Firestore transaction
+INVOICE_DRAW -1 + optional POINTS reward / Prize Claim
+  ↓
+Invoice Draw Result + Activity Ledger + Wallet
 ```
 
 核心資料層只認識 `NormalizedOrder`、平台自己的 `User` 與 `Wallet`。SHOPLINE 仍未實作，也沒有加入 SHOPLINE Payload、SDK、API Key、Secret 或 Authentication。
@@ -64,6 +72,20 @@ Reward points：
 normal 5    double 10    triple 30
 brandTriple 50    plusTriple 100    jackpot 300
 ```
+
+## Phase 3A Invoice Bonus Draw
+
+Phase 3A 已建立以既有 `INVOICE_DRAW` Wallet balance 為入口的電子發票額外兌獎核心。這不是正式財政部電子發票 API，也不是 SHOPLINE 串接；目前由 Development Admin 建立活動與獎池，Development Session 驗證抽獎流程。
+
+- `invoice_draw_campaigns`：draft、active、paused、ended lifecycle；啟用時固定 `prizePoolSnapshot`、`configVersion` 與 pool fingerprint。
+- `invoice_draw_prizes`：`NONE`、`POINTS`、`MANUAL_PRIZE`，支援 unlimited 或 server-side limited inventory。
+- `invoice_draw_prize_inventory`：限量獎項的 atomic remaining stock。
+- `invoice_draw_results`：不可變的抽獎結果、獎項 snapshot、balance snapshot、entropy hash 與 idempotency hash。
+- `prize_claims`：只有 `MANUAL_PRIZE` 會建立 pending claim；fulfilled 只更新兌領狀態，不改 Wallet 或庫存。
+
+正式結果使用 Node `crypto` entropy，透過 SHA-256 與 rejection sampling 做 weighted selection；不使用 `Math.random()`。同一 `userId + Idempotency-Key` 由 deterministic draw id 保證重送回傳相同結果，不會重扣 `INVOICE_DRAW`、重發 POINTS、重建 Ledger 或重複扣庫存。Wallet、庫存、結果、claim 與 Ledger 在同一 Firestore Transaction 中提交。
+
+Phase 3A 目前只提供受控 Development Session：Production Member Authentication 尚未實作。Phase 3B 的其他遊戲、正式電子發票對獎、退款資格回收與任何 SHOPLINE 功能均未開始。
 
 ## Firebase Setup
 
@@ -115,7 +137,7 @@ firebase emulators:start
 
 ## Phase 2 Integration Verification / Staging Preparation
 
-本階段只驗證 Phase 1、Phase 2A 與 Phase 2B 的整合，不新增 Phase 3 業務功能。可重複執行的 smoke test 會透過 Hosting Emulator API 建立 deterministic Mock User、Campaign、Mock Order、Session 與 Slot Spin，並以連接 Firestore Emulator 的 Admin SDK 檢查 persistence、Idempotency、Concurrency、Daily Bonus、Duplicate Order 與 Ledger Integrity：
+本節保留 Phase 2 Integration Verification / Staging Preparation 的驗證說明；Phase 3A 的驗證另記錄於 [docs/PHASE_3A_VERIFICATION.md](docs/PHASE_3A_VERIFICATION.md)。Phase 2 smoke test 會透過 Hosting Emulator API 建立 deterministic Mock User、Campaign、Mock Order、Session 與 Slot Spin，並以連接 Firestore Emulator 的 Admin SDK 檢查 persistence、Idempotency、Concurrency、Daily Bonus、Duplicate Order 與 Ledger Integrity：
 
 ```bash
 pnpm --dir functions run emulator:cleanup   # 明確指定 --all，只清除本機 Firestore Emulator
@@ -200,6 +222,33 @@ Request body 必須為 `{}`；Client 不可傳 `userId`、`result`、`reward` �
 
 `Idempotency-Key` 重送會回傳相同 `Game Result`。若同一會員只剩一個 `SLOT_SPIN` 且同時送出兩個不同 key，只有一個 request 成功，另一個回傳 `SLOT_SPIN_EXHAUSTED`。
 
+### Invoice Draw
+
+查詢目前抽獎活動與會員餘額：
+
+```http
+GET /api/me/invoice-draw/status
+Authorization: Bearer <development-session-token>
+```
+
+執行一次額外抽獎。Request body 必須為 `{}`，且不可由 Client 指定獎項、點數、權重、庫存或 campaign：
+
+```http
+POST /api/games/invoice-draw/draw
+Authorization: Bearer <development-session-token>
+Idempotency-Key: 22222222-2222-4222-8222-222222222222
+Content-Type: application/json
+```
+
+使用者只能查詢自己的結果與 claims：
+
+```text
+GET /api/me/invoice-draw/results?limit=20
+GET /api/me/prize-claims?limit=20
+```
+
+Development Admin API 可建立與管理 Invoice Draw Campaign、Prize、lifecycle、結果與 manual claim；這些 `/api/dev/**` route 只在 development environment 開啟。
+
 Phase 1 / 2A Development API 仍包括：
 
 ```text
@@ -240,6 +289,16 @@ Phase 2B：
 - `game_daily_states/{userId_YYYY-MM-DD}`：Asia/Taipei 日期的第一次遊玩狀態
 
 Slot Ledger 使用 append-only entries：`SLOT_SPIN -1`（`SLOT_PLAY`）、`POINTS +reward`（`SLOT_REWARD`），以及第一次遊玩的 `POINTS +5`（`DAILY_MISSION`）。
+
+Phase 3A：
+
+- `invoice_draw_campaigns/{campaignId}`
+- `invoice_draw_prizes/{prizeId}`
+- `invoice_draw_prize_inventory/{prizeId}`
+- `invoice_draw_results/{drawId}`
+- `prize_claims/{claimId}`
+
+Invoice Draw Ledger 使用 append-only entries：每次成功抽獎 `INVOICE_DRAW -1`（`INVOICE_DRAW_PLAY`）；只有 `POINTS` 獎項才會建立 `POINTS +reward`（`INVOICE_DRAW_REWARD`）。`NONE` 與 `MANUAL_PRIZE` 不會產生 `POINTS +0`。
 
 ## Existing Slot Game Integration
 
@@ -285,9 +344,10 @@ Activity Platform Functions：
 pnpm --dir functions test
 pnpm --dir functions run build
 pnpm --dir functions run typecheck
+pnpm --dir functions run verify:invoice-draw  # 需要 Functions / Firestore / Hosting Emulator
 ```
 
-測試涵蓋 Phase 1／2A 與 Phase 2B：Campaign／Rule、Activity Engine、Entitlement／Ledger／Wallet、OrderProcessor、Session、Server reward、UUID Idempotency-Key、同 key 重送、Daily Bonus、Wallet exhaustion、Transaction-style concurrent spin 與 API input protection。
+測試涵蓋 Phase 1／2A、Phase 2B 與 Phase 3A：Campaign／Rule、Activity Engine、Entitlement／Ledger／Wallet、OrderProcessor、Session、Server reward、UUID Idempotency-Key、同 key 重送、Daily Bonus、Wallet exhaustion、Transaction-style concurrent spin、Invoice Draw weighted random、campaign lifecycle、immutable prize pool、limited stock、manual claim fulfillment 與 API input protection。`verify:invoice-draw` 會透過 Hosting API 與 Firestore Emulator 驗證 POINTS、NONE、MANUAL_PRIZE、idempotency、INVOICE_DRAW concurrency、limited stock、Ledger 與 persistence。
 
 獨立 Slot Game（目前為 Vanilla JavaScript，沒有 TypeScript build）：
 
@@ -316,9 +376,20 @@ pnpm --dir functions run verify:browser
 
 Browser E2E 只把 Development Session token 放在目前 process environment；不要把 token、secret 或 private key 寫入 Repository。完整安裝、啟動、cleanup 與 staging checklist 請見 [docs/STAGING.md](docs/STAGING.md)。
 
+Phase 3A Development Admin Browser E2E（需要本機 Chrome、Playwright Core，以及 Functions／Firestore／Hosting Emulator）：
+
+```powershell
+$env:PLAYWRIGHT_CORE_ROOT = "C:\\Users\\<you>\\AppData\\Local\\012s-tools\\playwright-e2e"
+$env:BROWSER_E2E_API_BASE_URL = "http://127.0.0.1:5000"
+$env:BROWSER_E2E_ADMIN_URL = "http://127.0.0.1:5000/admin/"
+node scripts/phase3a-admin-browser-e2e.mjs
+```
+
+此驗證會透過 Development Admin 實際建立 Campaign／Prize、驗證 lifecycle、Test Draw、Result、Claim fulfillment 與重新載入後的 persistence；不會把 Session token 寫入 Repository。
+
 ## Scope Exclusions
 
-本階段仍不實作：
+目前仍不實作：
 
 - SHOPLINE API、Webhook、Authentication 或 Payload
 - 正式會員 Login、正式 Admin RBAC
@@ -326,10 +397,11 @@ Browser E2E 只把 Development Session token 放在目前 process environment；
 - 退款資格回收
 - 優惠券、購物金、POINTS 兌換
 - 其他遊戲、Slot Backend 以外的遊戲服務
+- Phase 3B 以後的其他活動引擎擴充
 
 ## Future SHOPLINE Integration
 
-SHOPLINE integration is intentionally not implemented in Phase 1, Phase 2A, or Phase 2B.
+SHOPLINE integration is intentionally not implemented in Phase 1, Phase 2A, Phase 2B, or Phase 3A.
 
 未來只需新增：
 

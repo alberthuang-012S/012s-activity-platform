@@ -27,7 +27,7 @@ export function handleCors(
   if (origin) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
-    response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
     response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key");
   }
 

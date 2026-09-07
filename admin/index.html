@@ -120,6 +120,148 @@
         <pre id="slot-test-result" class="result" aria-live="polite"></pre>
       </section>
 
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Invoice Draw Bonus（Phase 3A）</h2>
+            <p>建立發票額外抽獎活動、設定獎池，並以 Development Session 測試抽獎與兌領流程。</p>
+          </div>
+          <button id="refresh-invoice-draw" class="secondary" type="button">重新整理</button>
+        </div>
+        <div class="grid two-columns">
+          <article>
+            <h3>建立抽獎活動</h3>
+            <form id="invoice-draw-campaign-form">
+              <label>
+                活動名稱
+                <input id="invoice-draw-campaign-name" required value="2026 發票額外抽獎測試" />
+              </label>
+              <div class="form-row">
+                <label>
+                  開始時間（Asia/Taipei）
+                  <input id="invoice-draw-campaign-starts-at" type="datetime-local" required value="2026-09-01T00:00" />
+                </label>
+                <label>
+                  結束時間（Asia/Taipei）
+                  <input id="invoice-draw-campaign-ends-at" type="datetime-local" required value="2026-12-31T23:59" />
+                </label>
+              </div>
+              <button type="submit">建立 Invoice Draw Campaign</button>
+            </form>
+            <pre id="invoice-draw-campaign-result" class="result" aria-live="polite"></pre>
+          </article>
+
+          <article>
+            <h3>建立獎項</h3>
+            <form id="invoice-draw-prize-form">
+              <label>
+                Campaign ID
+                <input id="invoice-draw-prize-campaign-id" required placeholder="IDCAM_..." />
+              </label>
+              <div class="form-row">
+                <label>
+                  Prize Code
+                  <input id="invoice-draw-prize-code" required value="POINTS_10" />
+                </label>
+                <label>
+                  顯示名稱
+                  <input id="invoice-draw-prize-display-name" required value="10 POINTS" />
+                </label>
+              </div>
+              <label>
+                說明
+                <input id="invoice-draw-prize-description" value="Phase 3A 測試獎項" />
+              </label>
+              <div class="form-row">
+                <label>
+                  Reward Kind
+                  <select id="invoice-draw-prize-reward-kind">
+                    <option value="NONE">NONE</option>
+                    <option value="POINTS" selected>POINTS</option>
+                    <option value="MANUAL_PRIZE">MANUAL_PRIZE</option>
+                  </select>
+                </label>
+                <label>
+                  POINTS
+                  <input id="invoice-draw-prize-points" type="number" min="0" step="1" value="10" />
+                </label>
+              </div>
+              <div class="form-row">
+                <label>
+                  Weight
+                  <input id="invoice-draw-prize-weight" type="number" min="1" step="1" required value="1" />
+                </label>
+                <label>
+                  Stock Mode
+                  <select id="invoice-draw-prize-stock-mode">
+                    <option value="UNLIMITED" selected>UNLIMITED</option>
+                    <option value="LIMITED">LIMITED</option>
+                  </select>
+                </label>
+                <label>
+                  Total Stock
+                  <input id="invoice-draw-prize-total-stock" type="number" min="1" step="1" placeholder="限量時填寫" />
+                </label>
+              </div>
+              <button type="submit">建立獎項</button>
+            </form>
+            <pre id="invoice-draw-prize-result" class="result" aria-live="polite"></pre>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Campaign</th>
+                <th>期間</th>
+                <th>Status</th>
+                <th>Prize / Inventory</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="invoice-draw-campaigns-body">
+              <tr><td colspan="5" class="empty">尚未載入</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid two-columns">
+          <article>
+            <h3>Development Session 抽獎測試</h3>
+            <p class="section-copy">沿用上方建立的 Development Session；結果與扣除動作由 Server Transaction 決定。</p>
+            <div class="inline-actions">
+              <button id="invoice-draw-status" class="secondary" type="button">查詢抽獎狀態</button>
+              <button id="invoice-draw-test" type="button">POST /api/games/invoice-draw/draw</button>
+            </div>
+            <pre id="invoice-draw-result" class="result" aria-live="polite"></pre>
+          </article>
+          <article>
+            <h3>最近抽獎結果</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Draw</th><th>User</th><th>Prize</th><th>Created</th></tr></thead>
+                <tbody id="invoice-draw-results-body">
+                  <tr><td colspan="4" class="empty">尚未載入</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <article>
+          <h3>Pending Manual Prize Claims</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Claim</th><th>User</th><th>Prize</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="invoice-draw-claims-body">
+                <tr><td colspan="5" class="empty">尚未載入</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
       <section class="grid two-columns">
         <article class="card">
           <h2>建立測試訂單</h2>
@@ -237,7 +379,7 @@
       </section>
 
       <footer>
-        Phase 2B Development Admin 可驗證 Campaign、Activity Engine、Wallet、Development Session 與 Slot Backend；不包含 SHOPLINE、退款回收或其他遊戲。
+        Development Admin 僅供受控測試，可驗證 Phase 2B Slot Backend 與 Phase 3A Invoice Draw；不包含 SHOPLINE、退款回收、正式會員登入或其他遊戲。
       </footer>
     </main>
     <script src="/admin/admin.js" defer></script>

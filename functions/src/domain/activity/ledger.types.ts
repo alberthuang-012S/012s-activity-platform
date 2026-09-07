@@ -4,8 +4,10 @@ export type ActivityLedgerReason =
   | "ORDER_ACTIVITY"
   | "SLOT_PLAY"
   | "SLOT_REWARD"
-  | "DAILY_MISSION";
-export type ActivityLedgerSourceType = "ORDER" | "GAME_RESULT";
+  | "DAILY_MISSION"
+  | "INVOICE_DRAW_PLAY"
+  | "INVOICE_DRAW_REWARD";
+export type ActivityLedgerSourceType = "ORDER" | "GAME_RESULT" | "INVOICE_DRAW_RESULT";
 
 export interface ActivityLedgerEntry {
   id: string;

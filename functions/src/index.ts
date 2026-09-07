@@ -22,6 +22,13 @@ import { SessionService } from "./services/sessionService";
 import { WalletService } from "./services/walletService";
 import { createSlotGameService } from "./services/slotGameService";
 import { MockCommerceAdapter } from "./integrations/commerce/mock/mockCommerceAdapter";
+import { InvoiceDrawCampaignRepository } from "./repositories/invoiceDrawCampaignRepository";
+import { InvoiceDrawResultRepository } from "./repositories/invoiceDrawResultRepository";
+import { PrizeClaimRepository } from "./repositories/prizeClaimRepository";
+import { InvoiceDrawCampaignService } from "./services/invoiceDrawCampaignService";
+import { InvoiceDrawQueryService } from "./services/invoiceDrawQueryService";
+import { InvoiceDrawService } from "./services/invoiceDrawService";
+import { PrizeClaimService } from "./services/prizeClaimService";
 
 const runtimeConfig = getRuntimeConfig();
 const firebaseApp = getApps().length
@@ -46,6 +53,22 @@ const activityEngine = createActivityEngine({
 const walletService = new WalletService(walletRepository, customerRepository);
 const slotGameService = createSlotGameService({ gameResultRepository });
 const campaignService = new CampaignService(campaignRepository);
+const invoiceDrawCampaignRepository = new InvoiceDrawCampaignRepository(database);
+const invoiceDrawResultRepository = new InvoiceDrawResultRepository(database);
+const prizeClaimRepository = new PrizeClaimRepository(database);
+const invoiceDrawCampaignService = new InvoiceDrawCampaignService(invoiceDrawCampaignRepository);
+const invoiceDrawQueryService = new InvoiceDrawQueryService(
+  invoiceDrawCampaignRepository,
+  walletService,
+  invoiceDrawResultRepository,
+  prizeClaimRepository
+);
+const invoiceDrawService = new InvoiceDrawService({
+  resultRepository: invoiceDrawResultRepository,
+  claimRepository: prizeClaimRepository,
+  getAvailableCampaign: (now) => invoiceDrawCampaignRepository.getAvailableCampaign(now)
+});
+const prizeClaimService = new PrizeClaimService(prizeClaimRepository);
 const sessionRepository = new SessionRepository(database);
 const sessionService = new SessionService(
   sessionRepository,
@@ -85,6 +108,10 @@ export const api = onRequest(
     sessionService,
     walletService,
     slotGameService,
+    invoiceDrawCampaignService,
+    invoiceDrawService,
+    invoiceDrawQueryService,
+    prizeClaimService,
     devAdminEnabled: runtimeConfig.devAdminEnabled,
     devSessionEnabled: runtimeConfig.devAdminEnabled,
     allowedOrigins: runtimeConfig.corsAllowedOrigins

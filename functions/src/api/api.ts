@@ -27,6 +27,28 @@ import { reprocessOrderActivity } from "./dev/reprocessActivity";
 import { getMyWallet } from "./me/getWallet";
 import { spinSlot } from "./games/slot/spin";
 import { SlotGameService } from "../services/slotGameService";
+import { drawInvoiceDraw } from "./games/invoice-draw/draw";
+import {
+  getMyInvoiceDrawResults,
+  getMyInvoiceDrawStatus,
+  getMyPrizeClaims
+} from "./me/invoiceDraw";
+import {
+  createDevInvoiceDrawCampaign,
+  createDevInvoiceDrawPrize,
+  fulfillDevPrizeClaim,
+  getDevInvoiceDrawCampaign,
+  listDevInvoiceDrawCampaigns,
+  listDevInvoiceDrawResults,
+  listDevPrizeClaims,
+  transitionDevInvoiceDrawCampaign,
+  updateDevInvoiceDrawCampaign,
+  updateDevInvoiceDrawPrize
+} from "./dev/invoiceDraw";
+import { InvoiceDrawCampaignService } from "../services/invoiceDrawCampaignService";
+import { InvoiceDrawQueryService } from "../services/invoiceDrawQueryService";
+import { InvoiceDrawService } from "../services/invoiceDrawService";
+import { PrizeClaimService } from "../services/prizeClaimService";
 import { sendError } from "./response";
 
 export interface ApiDependencies {
@@ -40,6 +62,10 @@ export interface ApiDependencies {
   sessionService: SessionService;
   walletService: WalletService;
   slotGameService: SlotGameService;
+  invoiceDrawCampaignService: InvoiceDrawCampaignService;
+  invoiceDrawService: InvoiceDrawService;
+  invoiceDrawQueryService: InvoiceDrawQueryService;
+  prizeClaimService: PrizeClaimService;
   devAdminEnabled: boolean;
   devSessionEnabled: boolean;
   allowedOrigins: string[];
@@ -94,6 +120,62 @@ export function createApiHandler(dependencies: ApiDependencies) {
       return;
     }
 
+    if (request.method === "GET" && path === "/me/invoice-draw/status") {
+      if (!dependencies.devSessionEnabled) {
+        sendError(response, new ApplicationError("DEV_ADMIN_DISABLED", "Development session is disabled."));
+        return;
+      }
+      await getMyInvoiceDrawStatus(
+        request,
+        response,
+        dependencies.sessionService,
+        dependencies.invoiceDrawQueryService
+      );
+      return;
+    }
+
+    if (request.method === "GET" && path === "/me/invoice-draw/results") {
+      if (!dependencies.devSessionEnabled) {
+        sendError(response, new ApplicationError("DEV_ADMIN_DISABLED", "Development session is disabled."));
+        return;
+      }
+      await getMyInvoiceDrawResults(
+        request,
+        response,
+        dependencies.sessionService,
+        dependencies.invoiceDrawQueryService
+      );
+      return;
+    }
+
+    if (request.method === "GET" && path === "/me/prize-claims") {
+      if (!dependencies.devSessionEnabled) {
+        sendError(response, new ApplicationError("DEV_ADMIN_DISABLED", "Development session is disabled."));
+        return;
+      }
+      await getMyPrizeClaims(
+        request,
+        response,
+        dependencies.sessionService,
+        dependencies.invoiceDrawQueryService
+      );
+      return;
+    }
+
+    if (request.method === "POST" && path === "/games/invoice-draw/draw") {
+      if (!dependencies.devSessionEnabled) {
+        sendError(response, new ApplicationError("DEV_ADMIN_DISABLED", "Development session is disabled."));
+        return;
+      }
+      await drawInvoiceDraw(
+        request,
+        response,
+        dependencies.sessionService,
+        dependencies.invoiceDrawService
+      );
+      return;
+    }
+
     if (!path.startsWith("/dev")) {
       sendError(response, new ApplicationError("INVALID_ORDER", "API route not found."), 404);
       return;
@@ -105,6 +187,83 @@ export function createApiHandler(dependencies: ApiDependencies) {
         new ApplicationError("DEV_ADMIN_DISABLED", "Development admin is disabled.")
       );
       return;
+    }
+
+    if (request.method === "POST" && path === "/dev/invoice-draw/campaigns") {
+      await createDevInvoiceDrawCampaign(request, response, dependencies.invoiceDrawCampaignService);
+      return;
+    }
+
+    if (request.method === "GET" && path === "/dev/invoice-draw/campaigns") {
+      await listDevInvoiceDrawCampaigns(request, response, dependencies.invoiceDrawCampaignService);
+      return;
+    }
+
+    if (request.method === "GET" && path.startsWith("/dev/invoice-draw/campaigns/") && !path.endsWith("/prizes")) {
+      const campaignId = path.slice("/dev/invoice-draw/campaigns/".length);
+      if (!campaignId.includes("/")) {
+        await getDevInvoiceDrawCampaign(request, response, dependencies.invoiceDrawCampaignService, campaignId);
+        return;
+      }
+    }
+
+    if (request.method === "PATCH" && path.startsWith("/dev/invoice-draw/campaigns/")) {
+      const campaignId = path.slice("/dev/invoice-draw/campaigns/".length);
+      if (!campaignId.includes("/")) {
+        await updateDevInvoiceDrawCampaign(request, response, dependencies.invoiceDrawCampaignService, campaignId);
+        return;
+      }
+    }
+
+    if (request.method === "POST" && path.startsWith("/dev/invoice-draw/campaigns/") && path.endsWith("/prizes")) {
+      const campaignId = path.slice("/dev/invoice-draw/campaigns/".length, -"/prizes".length);
+      if (!campaignId.includes("/")) {
+        await createDevInvoiceDrawPrize(request, response, dependencies.invoiceDrawCampaignService, campaignId);
+        return;
+      }
+    }
+
+    for (const action of ["activate", "pause", "resume", "end"] as const) {
+      const suffix = `/${action}`;
+      if (request.method === "POST" && path.startsWith("/dev/invoice-draw/campaigns/") && path.endsWith(suffix)) {
+        const campaignId = path.slice("/dev/invoice-draw/campaigns/".length, -suffix.length);
+        if (!campaignId.includes("/")) {
+          await transitionDevInvoiceDrawCampaign(
+            request,
+            response,
+            dependencies.invoiceDrawCampaignService,
+            campaignId,
+            action
+          );
+          return;
+        }
+      }
+    }
+
+    if (request.method === "PATCH" && path.startsWith("/dev/invoice-draw/prizes/")) {
+      const prizeId = path.slice("/dev/invoice-draw/prizes/".length);
+      if (!prizeId.includes("/")) {
+        await updateDevInvoiceDrawPrize(request, response, dependencies.invoiceDrawCampaignService, prizeId);
+        return;
+      }
+    }
+
+    if (request.method === "GET" && path === "/dev/invoice-draw/results") {
+      await listDevInvoiceDrawResults(request, response, dependencies.invoiceDrawQueryService);
+      return;
+    }
+
+    if (request.method === "GET" && path === "/dev/prize-claims") {
+      await listDevPrizeClaims(request, response, dependencies.prizeClaimService);
+      return;
+    }
+
+    if (request.method === "POST" && path.startsWith("/dev/prize-claims/") && path.endsWith("/fulfill")) {
+      const claimId = path.slice("/dev/prize-claims/".length, -"/fulfill".length);
+      if (!claimId.includes("/")) {
+        await fulfillDevPrizeClaim(request, response, dependencies.prizeClaimService, claimId);
+        return;
+      }
     }
 
     if (request.method === "POST" && path === "/dev/campaigns") {

@@ -1,7 +1,7 @@
 {
   "name": "012s-activity-platform-functions",
   "private": true,
-  "description": "Phase 1, Phase 2A, and Phase 2B backend for the 2050 x 012S member activity platform.",
+  "description": "Phase 1, Phase 2A, Phase 2B, and Phase 3A backend for the 2050 x 012S member activity platform.",
   "main": "lib/index.js",
   "engines": {
     "node": "20"
@@ -11,6 +11,7 @@
     "serve": "pnpm run build && firebase emulators:start --only functions,firestore,hosting",
     "emulator:cleanup": "node ../scripts/emulator-cleanup.mjs --all",
     "verify:integration": "node ../scripts/integration-smoke-test.mjs",
+    "verify:invoice-draw": "node ../scripts/invoice-draw-integration-test.mjs",
     "verify:browser": "node ../scripts/frontend-browser-e2e.mjs",
     "shell": "pnpm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",
