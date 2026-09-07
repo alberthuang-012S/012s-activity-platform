@@ -1,4 +1,4 @@
-export type AppEnvironment = "development" | "production";
+export type AppEnvironment = "development" | "staging" | "production";
 
 export interface RuntimeConfig {
   environment: AppEnvironment;
@@ -18,7 +18,13 @@ const DEFAULT_DEV_CORS_ORIGINS = [
 ];
 
 function parseEnvironment(value: string | undefined): AppEnvironment {
-  return value === "production" ? "production" : "development";
+  if (value === "production") {
+    return "production";
+  }
+  if (value === "staging") {
+    return "staging";
+  }
+  return "development";
 }
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {

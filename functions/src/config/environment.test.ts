@@ -4,6 +4,7 @@ import { getRuntimeConfig } from "./environment";
 describe("runtime environment", () => {
   it("enables development APIs only in development", () => {
     expect(getRuntimeConfig({ APP_ENV: "development" }).devAdminEnabled).toBe(true);
+    expect(getRuntimeConfig({ APP_ENV: "staging" }).devAdminEnabled).toBe(false);
     expect(
       getRuntimeConfig({ APP_ENV: "development", DEV_ADMIN_ENABLED: "false" }).devAdminEnabled
     ).toBe(false);
@@ -19,5 +20,6 @@ describe("runtime environment", () => {
     });
     expect(config.corsAllowedOrigins).toEqual(["https://example.com"]);
     expect(config.corsAllowedOrigins).not.toContain("*");
+    expect(getRuntimeConfig({ APP_ENV: "staging" }).corsAllowedOrigins).toEqual([]);
   });
 });

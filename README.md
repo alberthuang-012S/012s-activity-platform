@@ -67,7 +67,7 @@ brandTriple 50    plusTriple 100    jackpot 300
 
 ## Firebase Setup
 
-需求：Node.js 20+、Java runtime（Firestore Emulator 需要）、Firebase CLI，以及可使用的 npm-compatible package manager（本機可使用 `pnpm`）。
+需求：Node.js 20、Java runtime（Firestore Emulator 需要）、Firebase CLI，以及可使用的 npm-compatible package manager（本機可使用 `pnpm`）。
 
 ```bash
 node --version
@@ -79,7 +79,7 @@ pnpm --dir functions install
 
 Firebase CLI 執行 Firestore Emulator 時需要 Java runtime；若 CLI 顯示額外的 Java 版本要求，請依目前 Firebase CLI 官方要求安裝。正式 Firebase Project ID 與憑證不寫死在 TypeScript，也不 commit private key。
 
-依環境複製 `.env.development.example` 或 `.env.production.example` 為 `functions/.env`。Production 預設會關閉 Development Admin 與 Development Session：
+依環境複製 `.env.development.example`、`.env.staging.example` 或 `.env.production.example` 為 `functions/.env`。只有 development 會開啟 Development Admin 與 Development Session；staging 與 production 預設都會關閉：
 
 ```text
 APP_ENV=development
@@ -91,6 +91,8 @@ FIREBASE_PROJECT_ID=
 ```
 
 `.firebaserc` 的 `demo-012s-activity-platform` 只作為本機 Emulator 的隔離 project name，不代表正式 Firebase project；正式或測試 project 請透過 Firebase CLI alias 或 `--project` 設定。
+
+`APP_ENV=staging` 會明確停用 Development API，即使誤設 `DEV_ADMIN_ENABLED=true` 也不會公開 Dev API。Staging 的 CORS 必須填入精確 origin 清單，不可使用 `*`。
 
 ## Emulator Setup
 
@@ -109,7 +111,22 @@ firebase emulators:start
 - Firestore：<http://127.0.0.1:8080>
 - Emulator UI：<http://127.0.0.1:4000>
 
-目前開發環境尚未安裝 Firebase CLI 與 Java，因此 Emulator Integration Test 尚未實機驗證；設定檔、Firestore rules 與 Transaction 測試仍保留。Admin 與遊戲都透過 Cloud Function API，Browser 不直接寫入 Firestore。
+本機驗證環境已安裝並使用 Node.js 20、Java 21 與 Firebase CLI；Functions、Firestore、Hosting 與 Emulator UI 已實際啟動並驗證。若是新環境，仍需先依 [docs/STAGING.md](docs/STAGING.md) 安裝這些工具。Admin 與遊戲都透過 Cloud Function API，Browser 不直接寫入 Firestore。
+
+## Phase 2 Integration Verification / Staging Preparation
+
+本階段只驗證 Phase 1、Phase 2A 與 Phase 2B 的整合，不新增 Phase 3 業務功能。可重複執行的 smoke test 會透過 Hosting Emulator API 建立 deterministic Mock User、Campaign、Mock Order、Session 與 Slot Spin，並以連接 Firestore Emulator 的 Admin SDK 檢查 persistence、Idempotency、Concurrency、Daily Bonus、Duplicate Order 與 Ledger Integrity：
+
+```bash
+pnpm --dir functions run emulator:cleanup   # 明確指定 --all，只清除本機 Firestore Emulator
+pnpm --dir functions run build
+firebase emulators:start
+pnpm --dir functions run verify:integration
+```
+
+預設 smoke test 連線 `http://127.0.0.1:5000`；可用 `INTEGRATION_BASE_URL`、`FIRESTORE_EMULATOR_URL`、`FIREBASE_PROJECT_ID` 與 `INTEGRATION_RUN_ID` 覆寫。Browser E2E 可用 `pnpm --dir functions run verify:browser` 執行，需提供 `PLAYWRIGHT_CORE_ROOT`、`BROWSER_E2E_SESSION_TOKEN` 與本機 Chrome 路徑。實際驗證結果記錄於 [docs/INTEGRATION_VERIFICATION.md](docs/INTEGRATION_VERIFICATION.md)。
+
+Staging 只先整理為 Deployment Ready，不會在沒有明確 Firebase Staging Project 與部署授權時建立雲端資源或部署。完整設定、部署 checklist、rollback 與 secret handling 請見 [docs/STAGING.md](docs/STAGING.md)。
 
 ## Development Flow
 
@@ -280,6 +297,24 @@ node --test tests/frontend.test.js
 ```
 
 Frontend static tests 確認公開 Debug Controls 移除、Wallet／Spin API 與 Authorization／Idempotency-Key 存在、authoritative data 不進 localStorage、Server result 交給既有動畫，以及 API failure 不產生假結果。
+
+整合 smoke test（需要 Functions、Firestore、Hosting Emulator 正在執行）：
+
+```bash
+pnpm --dir functions run verify:integration
+```
+
+Browser E2E（需要本機 Chrome、Playwright Core、Functions／Firestore／Hosting Emulator，以及一個 Development Session token）：
+
+```powershell
+$env:PLAYWRIGHT_CORE_ROOT = "C:\\Users\\<you>\\AppData\\Local\\012s-tools\\playwright-e2e"
+$env:BROWSER_E2E_SESSION_TOKEN = "<temporary-development-session-token>"
+$env:BROWSER_E2E_BASE_URL = "http://127.0.0.1:8000/"
+$env:BROWSER_E2E_API_BASE_URL = "http://127.0.0.1:5000"
+pnpm --dir functions run verify:browser
+```
+
+Browser E2E 只把 Development Session token 放在目前 process environment；不要把 token、secret 或 private key 寫入 Repository。完整安裝、啟動、cleanup 與 staging checklist 請見 [docs/STAGING.md](docs/STAGING.md)。
 
 ## Scope Exclusions
 

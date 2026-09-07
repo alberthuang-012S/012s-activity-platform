@@ -9,6 +9,9 @@
   "scripts": {
     "build": "tsc",
     "serve": "pnpm run build && firebase emulators:start --only functions,firestore,hosting",
+    "emulator:cleanup": "node ../scripts/emulator-cleanup.mjs --all",
+    "verify:integration": "node ../scripts/integration-smoke-test.mjs",
+    "verify:browser": "node ../scripts/frontend-browser-e2e.mjs",
     "shell": "pnpm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
