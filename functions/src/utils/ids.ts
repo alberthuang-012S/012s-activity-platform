@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 
 export type EntityIdPrefix =
+  | "SPEND"
+  | "DRAWENTRY"
   | "USR"
   | "ORD"
   | "EVT"

@@ -6,7 +6,27 @@ export const ACTIVITY_BALANCE_TYPES: readonly ActivityBalanceType[] = [
   "POINTS"
 ];
 
-export type ActivityRuleType = "ORDER_TOTAL_MULTIPLE" | "VALID_INVOICE";
+export type ActivityRuleType = "ORDER_TOTAL_MULTIPLE" | "VALID_INVOICE" | "PRODUCT_QUANTITY" | "CUMULATIVE_SPEND";
+
+export interface CumulativeSpendRule {
+  id: string;
+  campaignId: string;
+  type: "CUMULATIVE_SPEND";
+  thresholdAmount: number;
+  grantQuantity: number;
+  enabled: boolean;
+}
+
+export interface ProductQuantityRule {
+  id: string;
+  campaignId: string;
+  type: "PRODUCT_QUANTITY";
+  entitlementType: "SLOT_SPIN";
+  productIds: string[];
+  requiredQuantity: number;
+  grantQuantity: number;
+  enabled: boolean;
+}
 
 export interface OrderTotalMultipleRule {
   id: string;
@@ -27,9 +47,10 @@ export interface ValidInvoiceRule {
   enabled: boolean;
 }
 
-export type ActivityRule = OrderTotalMultipleRule | ValidInvoiceRule;
+export type ActivityRule = OrderTotalMultipleRule | ValidInvoiceRule | ProductQuantityRule | CumulativeSpendRule;
 
-export type NewActivityRule = Omit<ActivityRule, "id" | "campaignId">;
+type WithoutIds<T> = T extends unknown ? Omit<T, "id" | "campaignId"> : never;
+export type NewActivityRule = WithoutIds<ActivityRule>;
 
 export type ActivityProcessStatus = "processing" | "processed" | "ignored" | "failed";
 

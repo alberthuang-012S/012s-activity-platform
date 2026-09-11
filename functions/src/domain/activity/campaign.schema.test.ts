@@ -5,6 +5,18 @@ import {
 } from "./campaign.schema";
 
 describe("Phase 2A campaign and rule validation", () => {
+  it("keeps product and cumulative campaigns separate", () => {
+    const base = { name:"活動", startsAt:"2026-09-01", endsAt:"2026-12-31" };
+    const product = { type:"PRODUCT_QUANTITY", productIds:["PPA001"], requiredQuantity:1, grantQuantity:1 };
+    const spend = { type:"CUMULATIVE_SPEND", thresholdAmount:1000, grantQuantity:1 };
+    expect(parseCreateCampaignCommand({...base, category:"product", rules:[product]}).category).toBe("product");
+    expect(parseCreateCampaignCommand({...base, category:"cumulative_spend", rules:[spend]}).category).toBe("cumulative_spend");
+    for (const category of ["product", "cumulative_spend"]) {
+      expect(()=>parseCreateCampaignCommand({...base, category, rules:[product,spend]})).toThrow();
+      expect(()=>parseCreateCampaignCommand({...base, category, rules:[]})).toThrow();
+    }
+    expect(()=>parseCreateCampaignCommand({...base, category:"unknown", rules:[product]})).toThrow();
+  });
   it("builds the default purchase rules from admin fields", () => {
     const command = parseCreateCampaignCommand({
       name: "2026 測試消費活動",

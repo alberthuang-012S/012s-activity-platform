@@ -40,6 +40,23 @@ Invoice Draw Result + Activity Ledger + Wallet
 
 ## Phase 1 / Phase 2A
 
+### 商品數量與累積消費規則（目前員工介面）
+
+新建活動先選擇「購買商品抽獎活動」或「累計消費抽獎活動」，每個活動只有對應類型的規則，並有自己的名稱、期間與啟用／結束狀態。可同時啟用多個同類或不同類活動，日期重疊不再阻擋。訂單符合多個活動時分別發放（遊戲次數加總到會員餘額，累計消費資格依活動分開保存）。
+
+兩種規則：
+
+- `PRODUCT_QUANTITY`：同筆已付款訂單的指定 `productId` 件數合計，每滿 `requiredQuantity` 件發放 `grantQuantity` 次 `SLOT_SPIN`。未達件數不跨單累計；其他商品、金額及發票不影響遊戲次數。
+- `CUMULATIVE_SPEND`：同會員、活動、規則下，活動期間的已付款訂單總額跨單累積（全部商品，TWD）。每滿門檻產生獨立抽獎資格，餘額保留；以分儲存金額。資格存於 `spend_draw_entries`，累積進度存於 `spend_draw_progress`，不寫入 `INVOICE_DRAW` 或 `SLOT_SPIN`。會員資料頁可查看累積金額與資格份數。
+
+累積進度、資格及訂單處理紀錄在同一 Firestore transaction 提交，保護重送與並行訂單。此版完成資格累積，累積消費抽獎的獎池、開獎與兌領尚未建立。退款回收尚未實作。
+
+既有活動保持原規則並標示「既有混合活動」，不會自動拆分或移轉資格。若要停止舊活動的獎勵，可個別結束該活動，不影響其他活動。新活動的累積從處理的訂單開始，舊訂單不會自動回補，舊資格不會轉移。若手動重新處理舊訂單，符合新活動日期且尚未於新活動處理的訂單仍可計入。
+
+活動分類與多活動生命週期變更已通過 61 項單元測試、編譯、型別檢查及模擬 API 的瀏覽器表單驗證。多活動的本機資料庫驗證已加入下方腳本；2026-09-11 修改時 Emulator 未啟動，尚未重跑此新增整合案例。
+
+啟動本機 Emulator 後可執行 `node scripts/verify-product-spend.cjs`；腳本僅使用本機 Firestore 的獨立 `demo-product-spend-verification` 專案。已驗證指定商品多行合計、其他商品排除、跨單累积、餘額、重送、並行、待付款排除與會員隔離。
+
 已完成並保留：
 
 - Mock Customer → External Identity → Mock Order → `NormalizedOrder` → `OrderProcessor`
@@ -117,6 +134,18 @@ FIREBASE_PROJECT_ID=
 `APP_ENV=staging` 會明確停用 Development API，即使誤設 `DEV_ADMIN_ENABLED=true` 也不會公開 Dev API。Staging 的 CORS 必須填入精確 origin 清單，不可使用 `*`。
 
 ## Emulator Setup
+
+### 內部員工作業台（第一版）
+
+啟動下方 Emulator 後，開啟 `http://127.0.0.1:5000/admin/`。
+介面提供會員管理、訂單作業、消費活動、發票抽獎與兌領、遊戲測試五個分頁。
+會員管理可搜尋本次載入的最近 100 位會員；選取會員會顯示餘額與異動紀錄，並將會員編號帶入訂單與測試欄位。
+切換會員會清除原本的測試連線，執行遊戲前請重新建立連線。詳細 API 回應可展開查看。
+
+操作結果以中文摘要呈現：連線狀態、會員餘額卡片、遊戲獎勵及訂單資訊；JSON 收於「技術詳細資料」，連線 token 不顯示。建立連線及完成拉霸後自動更新餘額。介面已以模擬 API 驗證連線、餘額刷新、獎勵摘要、錯誤中文提示、切換會員清除資料與手機版排版。
+
+目前沿用 development API，只供受控內部測試，尚未提供員工登入或角色權限，不能視為正式營運後台。
+已使用模擬 API 的瀏覽器檢查驗證分頁、搜尋、會員帶入、餘額顯示及手機版無整頁水平溢出；此介面更新尚未重跑 Emulator 端到端驗證。
 
 先編譯 Functions，再從 Repository 根目錄執行：
 

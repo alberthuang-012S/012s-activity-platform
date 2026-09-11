@@ -22,6 +22,7 @@ export interface ApplyActivityInput {
   userId: string;
   campaignId: string;
   grants: ActivityGrantInput[];
+  cumulativeSpend?: { ruleId: string; thresholdAmount: number; grantQuantity: number; amount: number }[];
 }
 
 export interface ApplyActivityResult {
@@ -40,10 +41,22 @@ export interface RecordActivityFailureInput {
 }
 
 export interface ActivityProcessRepositoryPort {
+  listSpendProgress?(userId: string): Promise<SpendDrawProgress[]>;
   applyActivity(input: ApplyActivityInput): Promise<ApplyActivityResult>;
   recordFailure(input: RecordActivityFailureInput): Promise<ActivityProcess>;
   getProcess(processId: string): Promise<ActivityProcess | null>;
   listForOrder(orderId: string): Promise<ActivityProcess[]>;
+}
+
+export interface SpendDrawProgress {
+  userId: string;
+  campaignId: string;
+  ruleId: string;
+  totalMinor: number;
+  thresholdAmount: number;
+  totalEntries: number;
+  remainingAmount: number;
+  updatedAt: string;
 }
 
 function validBalance(value: unknown): value is number {
@@ -86,6 +99,11 @@ function storedWallet(userId: string, snapshotData: FirebaseFirestore.DocumentDa
 export class ActivityProcessRepository implements ActivityProcessRepositoryPort {
   constructor(private readonly db: Firestore) {}
 
+  async listSpendProgress(userId: string): Promise<SpendDrawProgress[]> {
+    const snapshot = await this.db.collection("spend_draw_progress").where("userId", "==", userId).get();
+    return snapshot.docs.map(doc => doc.data() as SpendDrawProgress);
+  }
+
   async applyActivity(input: ApplyActivityInput): Promise<ApplyActivityResult> {
     const processReference = this.db.collection("activity_processes").doc(input.processId);
     const walletReference = this.db.collection("wallets").doc(input.userId);
@@ -109,6 +127,27 @@ export class ActivityProcessRepository implements ActivityProcessRepositoryPort 
 
       const balances = readBalances(walletSnapshot.data()?.balances);
       const timestamp = nowIso();
+      // Read every accumulation document before writing. The order process and
+      // member/rule counter participate in the same transaction for replay and concurrency safety.
+      const spendUpdates = [];
+      for (const rule of input.cumulativeSpend ?? []) {
+        const id = createDeterministicId("SPEND", `${input.userId}:${input.campaignId}:${rule.ruleId}`);
+        const reference = this.db.collection("spend_draw_progress").doc(id);
+        const snapshot = await transaction.get(reference);
+        const previous = snapshot.data()?.totalMinor ?? 0;
+        const thresholdMinor = Math.round(rule.thresholdAmount * 100);
+        const totalMinor = previous + Math.round(rule.amount * 100);
+        if (!Number.isSafeInteger(totalMinor) || totalMinor < 0 || !Number.isSafeInteger(thresholdMinor) || thresholdMinor <= 0) {
+          throw new ApplicationError("INVALID_ACTIVITY_RULE", "Invalid cumulative spend amount.");
+        }
+        const quantity = (Math.floor(totalMinor / thresholdMinor) - Math.floor(previous / thresholdMinor)) * rule.grantQuantity;
+        spendUpdates.push({ reference, quantity, rule, data: {
+          userId: input.userId, campaignId: input.campaignId, ruleId: rule.ruleId,
+          totalMinor, thresholdAmount: rule.thresholdAmount,
+          totalEntries: Math.floor(totalMinor / thresholdMinor) * rule.grantQuantity,
+          remainingAmount: (totalMinor % thresholdMinor) / 100, updatedAt: timestamp
+        } });
+      }
       const entitlements: Entitlement[] = [];
       const ledgerEntries: ActivityLedgerEntry[] = [];
 
@@ -179,6 +218,17 @@ export class ActivityProcessRepository implements ActivityProcessRepositoryPort 
 
       for (const entitlement of entitlements) {
         transaction.create(this.db.collection("entitlements").doc(entitlement.id), entitlement);
+      }
+      for (const update of spendUpdates) {
+        transaction.set(update.reference, update.data);
+        if (update.quantity > 0) {
+          const id = createDeterministicId("DRAWENTRY", `${input.processId}:${update.rule.ruleId}`);
+          transaction.create(this.db.collection("spend_draw_entries").doc(id), {
+            id, userId: input.userId, campaignId: input.campaignId,
+            ruleId: update.rule.ruleId, orderId: input.orderId,
+            quantity: update.quantity, createdAt: timestamp
+          });
+        }
       }
       for (const entry of ledgerEntries) {
         transaction.create(this.db.collection("activity_ledger").doc(entry.id), entry);

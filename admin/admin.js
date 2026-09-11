@@ -16,8 +16,19 @@ const profileResult = document.querySelector("#profile-result");
 const ordersBody = document.querySelector("#orders-body");
 const orderDetailResult = document.querySelector("#order-detail-result");
 let devSessionToken = "";
+const activityPlatformApiBaseUrl = String(window.ACTIVITY_PLATFORM_API_BASE_URL || "").replace(/\/+$/, "");
+
+function apiRequestUrl(path) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return activityPlatformApiBaseUrl ? `${activityPlatformApiBaseUrl}${normalizedPath}` : normalizedPath;
+}
 
 function setNotice(message, isError = false) {
+  message = message.replaceAll("請先建立 Development Session。", "請先輸入會員編號，按「建立測試連線」，再進行操作。")
+    .replaceAll("Development Session 建立成功。", "會員已連線，可以查詢餘額與測試遊戲。")
+    .replaceAll("Wallet 已載入。", "會員餘額已更新。")
+    .replaceAll("Slot Backend 測試成功，結果由 Server 決定。", "遊戲已完成，獎勵與剩餘次數已更新。")
+    .replaceAll("Mock Order 建立成功，Activity Engine 已執行。", "訂單建立成功，可查看下方訂單獎勵明細。");
   notice.textContent = message;
   notice.classList.toggle("error", isError);
 }
@@ -28,11 +39,14 @@ function showResult(element, value) {
 
 async function requestJson(path, options = {}) {
   const { headers: optionHeaders = {}, ...requestOptions } = options;
-  const response = await fetch(path, {
+  const response = await fetch(apiRequestUrl(path), {
     ...requestOptions,
     headers: { "Content-Type": "application/json", ...optionHeaders }
   });
   const body = await response.json().catch(() => ({}));
+  if (response.ok && body.success !== true) {
+    throw new Error("服務尚未連線，請確認本機測試服務已啟動，再重新操作。");
+  }
   if (!response.ok || body.success === false) {
     const error = body.error || { code: "INTERNAL_ERROR", message: "Request failed." };
     const exception = new Error(error.message);
@@ -82,13 +96,30 @@ function showRequestError(element, error) {
     success: false,
     error: { code: error.code || "INTERNAL_ERROR", message: error.message }
   });
-  setNotice(`${error.code || "INTERNAL_ERROR"}: ${error.message}`, true);
+  setNotice(friendlyError(error), true);
+}
+
+function friendlyError(error) {
+  return ({ SLOT_SPIN_EXHAUSTED: "遊戲次數不足。請先建立符合指定商品規則的已付款訂單。",
+    INVOICE_DRAW_EXHAUSTED: "發票抽獎次數不足，請先確認會員的發票抽獎資格。",
+    INVOICE_DRAW_CAMPAIGN_NOT_AVAILABLE: "目前沒有可參加的發票抽獎活動，請先設定獎池並啟用活動。",
+    DUPLICATE_ORDER: "這筆訂單已建立，請使用新的外部訂單編號。",
+    EXTERNAL_CUSTOMER_ALREADY_EXISTS: "此外部會員編號已存在，請從會員名單選取，或使用新的編號。"
+  })[error.code] || error.message || "操作未完成，請稍後重試。";
+}
+
+function describeActivityRule(rule) {
+  if (rule.type === "PRODUCT_QUANTITY") return `商品 ${rule.productIds.join("、")}：每 ${rule.requiredQuantity} 件送 ${rule.grantQuantity} 次遊戲`;
+  if (rule.type === "CUMULATIVE_SPEND") return `跨單累積每滿 NT$${rule.thresholdAmount}：${rule.grantQuantity} 份獨立抽獎資格`;
+  if (rule.type === "ORDER_TOTAL_MULTIPLE") return "舊規則：單筆金額送遊戲次數（新商品規則須另建活動）";
+  return "有效發票送發票抽獎次數";
 }
 
 async function loadCampaigns() {
   try {
     const body = await requestJson("/api/dev/campaigns");
-    const campaigns = body.data || [];
+    const filter = valueOf("#campaign-filter");
+    const campaigns = (body.data || []).filter(({ campaign }) => filter === "all" || (campaign.category || "legacy") === filter);
     if (campaigns.length === 0) {
       campaignsBody.innerHTML = '<tr><td colspan="5" class="empty">尚無 Campaign</td></tr>';
       return;
@@ -98,18 +129,30 @@ async function loadCampaigns() {
       .map(({ campaign, rules }) => {
         const activateButton = campaign.status === "draft"
           ? `<button class="secondary small activate-campaign" data-campaign-id="${escapeHtml(campaign.id)}" type="button">啟用</button>`
-          : "—";
+          : campaign.status === "active"
+            ? `<button class="secondary small end-campaign" data-campaign-id="${escapeHtml(campaign.id)}" type="button">結束活動</button>` : "—";
         return `
           <tr>
-            <td>${escapeHtml(campaign.name)}<br><small>${escapeHtml(campaign.id)}</small></td>
+            <td>${escapeHtml(campaign.name)}<br><span class="status-pill">${escapeHtml(({product:"購買商品抽獎",cumulative_spend:"累計消費抽獎"})[campaign.category] || "既有混合活動")}</span><br><small>${escapeHtml(campaign.id)}</small></td>
             <td>${escapeHtml(new Date(campaign.startsAt).toLocaleString("zh-TW"))}<br>～ ${escapeHtml(new Date(campaign.endsAt).toLocaleString("zh-TW"))}</td>
-            <td>${escapeHtml(campaign.status)}</td>
-            <td>${(rules || []).map((rule) => escapeHtml(rule.type)).join("<br>") || "—"}</td>
+            <td>${escapeHtml(({draft:"草稿",active:"已啟用",ended:"已結束"})[campaign.status] || campaign.status)}</td>
+            <td>${(rules || []).map((rule) => escapeHtml(describeActivityRule(rule))).join("<br>") || "—"}</td>
             <td>${activateButton}</td>
           </tr>`;
       })
       .join("");
 
+    document.querySelectorAll(".end-campaign").forEach(button => {
+      button.addEventListener("click", async () => {
+        if (!window.confirm("結束後不再處理此活動的新訂單，既有獎勵與累積紀錄會保留。確定結束？")) return;
+        button.disabled = true;
+        try {
+          await requestJson(`/api/dev/campaigns/${encodeURIComponent(button.dataset.campaignId)}/end`, { method: "POST" });
+          setNotice("此活動已結束，其他上線活動繼續運作。");
+          await loadCampaigns();
+        } catch (error) { showRequestError(campaignResult, error); button.disabled = false; }
+      });
+    });
     document.querySelectorAll(".activate-campaign").forEach((button) => {
       button.addEventListener("click", async () => {
         try {
@@ -318,11 +361,15 @@ document.querySelector("#campaign-form").addEventListener("submit", async (event
       method: "POST",
       body: JSON.stringify({
         name: valueOf("#campaign-name"),
-        startsAt: localDateTimeToIso("#campaign-starts-at"),
-        endsAt: localDateTimeToIso("#campaign-ends-at"),
-        thresholdAmount: numberOf("#campaign-threshold"),
-        slotSpinGrantQuantity: numberOf("#campaign-slot-grant"),
-        invoiceDrawGrantQuantity: numberOf("#campaign-invoice-grant")
+        category: valueOf("#campaign-category"),
+        startsAt: taipeiDateTimeToIso("#campaign-starts-at"),
+        endsAt: taipeiDateTimeToIso("#campaign-ends-at"),
+        rules: valueOf("#campaign-category") === "product" ? [
+          { type: "PRODUCT_QUANTITY", productIds: valueOf("#campaign-product-ids").split(/[,，]/).map(id => id.trim()).filter(Boolean),
+            requiredQuantity: numberOf("#campaign-product-quantity"), grantQuantity: numberOf("#campaign-slot-grant") }
+        ] : [
+          { type: "CUMULATIVE_SPEND", thresholdAmount: numberOf("#campaign-threshold"), grantQuantity: numberOf("#campaign-spend-grant") }
+        ]
       })
     });
     showResult(campaignResult, body);
@@ -334,6 +381,14 @@ document.querySelector("#campaign-form").addEventListener("submit", async (event
 });
 
 document.querySelector("#refresh-campaigns").addEventListener("click", loadCampaigns);
+document.querySelector("#campaign-filter").addEventListener("change", loadCampaigns);
+document.querySelector("#campaign-category").addEventListener("change", () => {
+  const product = valueOf("#campaign-category") === "product";
+  document.querySelector("#product-campaign-fields").hidden = !product;
+  document.querySelector("#product-campaign-fields").disabled = !product;
+  document.querySelector("#spend-campaign-fields").hidden = product;
+  document.querySelector("#spend-campaign-fields").disabled = product;
+});
 
 document.querySelector("#invoice-draw-campaign-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -454,24 +509,33 @@ document.querySelector("#customer-form").addEventListener("submit", async (event
 
 document.querySelector("#session-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  devSessionToken = "";
+  walletResult.textContent = "";
+  slotTestResult.textContent = "";
+  invoiceDrawResult.textContent = "";
+  const requestedUserId = valueOf("#session-user-id");
+  const button = event.submitter;
+  if (button) button.disabled = true;
   try {
     const body = await requestJson("/api/dev/sessions", {
       method: "POST",
-      body: JSON.stringify({ userId: valueOf("#session-user-id") })
+      body: JSON.stringify({ userId: requestedUserId })
     });
+    if (requestedUserId !== valueOf("#session-user-id")) return;
     devSessionToken = body.data.token;
     showResult(sessionResult, {
       success: true,
       data: {
-        token: devSessionToken,
+        userId: valueOf("#session-user-id"),
         expiresAt: body.data.expiresAt,
         note: "Token 只保存在此頁面記憶體，重新整理後需重新建立。"
       }
     });
     setNotice("Development Session 建立成功。");
+    document.querySelector("#load-wallet").click();
   } catch (error) {
     showRequestError(sessionResult, error);
-  }
+  } finally { if (button) button.disabled = false; }
 });
 
 document.querySelector("#load-wallet").addEventListener("click", async () => {
@@ -479,13 +543,16 @@ document.querySelector("#load-wallet").addEventListener("click", async () => {
     setNotice("請先建立 Development Session。", true);
     return;
   }
+  const requestedToken = devSessionToken;
   try {
     const body = await requestJson("/api/me/wallet", {
-      headers: { Authorization: `Bearer ${devSessionToken}` }
+      headers: { Authorization: `Bearer ${requestedToken}` }
     });
+    if (requestedToken !== devSessionToken) return;
     showResult(walletResult, body);
     setNotice("Wallet 已載入。");
   } catch (error) {
+    if (requestedToken !== devSessionToken) return;
     showRequestError(walletResult, error);
   }
 });
@@ -496,6 +563,9 @@ document.querySelector("#slot-test-form").addEventListener("submit", async (even
     setNotice("請先建立 Development Session。", true);
     return;
   }
+  const requestedToken = devSessionToken;
+  const button = event.submitter;
+  if (button) button.disabled = true;
   try {
     if (!window.crypto || typeof window.crypto.randomUUID !== "function") {
       throw new Error("此瀏覽器無法建立安全的 Idempotency-Key。");
@@ -508,11 +578,14 @@ document.querySelector("#slot-test-form").addEventListener("submit", async (even
         "Idempotency-Key": window.crypto.randomUUID()
       }
     });
-    showResult(slotTestResult, { success: true, data: body });
+    if (requestedToken !== devSessionToken) return;
+    showResult(slotTestResult, body);
     setNotice("Slot Backend 測試成功，結果由 Server 決定。");
+    document.querySelector("#load-wallet").click();
   } catch (error) {
+    if (requestedToken !== devSessionToken) return;
     showRequestError(slotTestResult, error);
-  }
+  } finally { if (button) button.disabled = false; }
 });
 
 document.querySelector("#order-form").addEventListener("submit", async (event) => {

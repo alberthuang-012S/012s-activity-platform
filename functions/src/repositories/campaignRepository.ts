@@ -2,13 +2,14 @@ import { Firestore } from "firebase-admin/firestore";
 import { ApplicationError } from "../domain/order/order.errors";
 import { ActivityRule, NewActivityRule } from "../domain/activity/activity.types";
 import { Campaign, CampaignWithRules } from "../domain/activity/campaign.types";
-import { campaignsOverlap, validateActivityRule } from "../domain/activity/campaign.schema";
+import { validateActivityRule } from "../domain/activity/campaign.schema";
 import { nowIso } from "../utils/dates";
 import { createPrefixedId } from "../utils/ids";
 
 export interface CreateCampaignData {
   name: string;
   type: "purchase";
+  category?: import("../domain/activity/campaign.types").CampaignCategory;
   timezone: string;
   startsAt: string;
   endsAt: string;
@@ -16,6 +17,7 @@ export interface CreateCampaignData {
 }
 
 export interface CampaignRepositoryPort {
+  endCampaign?(campaignId: string): Promise<Campaign>;
   createCampaign(data: CreateCampaignData): Promise<CampaignWithRules>;
   getCampaign(campaignId: string): Promise<Campaign | null>;
   getCampaignWithRules(campaignId: string): Promise<CampaignWithRules | null>;
@@ -37,6 +39,18 @@ function ruleFromSnapshot(snapshot: FirebaseFirestore.DocumentSnapshot): Activit
 export class CampaignRepository implements CampaignRepositoryPort {
   constructor(private readonly db: Firestore) {}
 
+  async endCampaign(campaignId: string): Promise<Campaign> {
+    const reference = this.db.collection("campaigns").doc(campaignId);
+    return this.db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists) throw new ApplicationError("CAMPAIGN_NOT_FOUND", "Campaign could not be resolved.");
+      const campaign = campaignFromSnapshot(snapshot);
+      const updated: Campaign = { ...campaign, status: "ended", updatedAt: nowIso() };
+      transaction.set(reference, updated);
+      return updated;
+    });
+  }
+
   async createCampaign(data: CreateCampaignData): Promise<CampaignWithRules> {
     const campaignId = createPrefixedId("CAM");
     const timestamp = nowIso();
@@ -44,6 +58,7 @@ export class CampaignRepository implements CampaignRepositoryPort {
       id: campaignId,
       name: data.name,
       type: data.type,
+      ...(data.category === undefined ? {} : { category: data.category }),
       status: "draft",
       timezone: data.timezone,
       startsAt: data.startsAt,
@@ -132,21 +147,6 @@ export class CampaignRepository implements CampaignRepositoryPort {
         );
       }
 
-      const activeSnapshot = await transaction.get(
-        this.db.collection("campaigns").where("status", "==", "active")
-      );
-      const overlapping = activeSnapshot.docs
-        .map((document) => campaignFromSnapshot(document))
-        .filter((candidate) => candidate.type === "purchase")
-        .some((candidate) => campaignsOverlap(campaign, candidate));
-
-      if (overlapping) {
-        throw new ApplicationError(
-          "CAMPAIGN_OVERLAP",
-          "An active purchase campaign overlaps this campaign window."
-        );
-      }
-
       const updated: Campaign = {
         ...campaign,
         status: "active",
@@ -188,6 +188,9 @@ export class CampaignRepository implements CampaignRepositoryPort {
         campaignId: current.campaignId
       } as ActivityRule;
       validateActivityRule(updated);
+      if (campaign.category && updated.type !== (campaign.category === "product" ? "PRODUCT_QUANTITY" : "CUMULATIVE_SPEND")) {
+        throw new ApplicationError("INVALID_ACTIVITY_RULE", "Rule must match campaign category.");
+      }
       transaction.set(ruleReference, updated);
       return updated;
     });

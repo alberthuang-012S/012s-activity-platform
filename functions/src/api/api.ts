@@ -14,6 +14,7 @@ import { WalletService } from "../services/walletService";
 import { createDevSession } from "./dev/createDevSession";
 import {
   activateDevCampaign,
+  endDevCampaign,
   createDevCampaign,
   listDevCampaigns
 } from "./dev/campaigns";
@@ -284,6 +285,11 @@ export function createApiHandler(dependencies: ApiDependencies) {
         dependencies.campaignService,
         campaignId
       );
+      return;
+    }
+
+    if (request.method === "POST" && path.startsWith("/dev/campaigns/") && path.endsWith("/end")) {
+      await endDevCampaign(request, response, dependencies.campaignService, path.slice("/dev/campaigns/".length, -"/end".length));
       return;
     }
 

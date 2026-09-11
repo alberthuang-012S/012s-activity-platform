@@ -14,6 +14,7 @@ import { WalletService } from "./walletService";
 import { StoredOrder } from "../domain/order/order.types";
 
 export interface CustomerActivityProfile extends CustomerProfile {
+  spendDrawProgress: import("../repositories/activityProcessRepository").SpendDrawProgress[];
   wallet: WalletView;
   entitlements: Entitlement[];
   ledger: ActivityLedgerEntry[];
@@ -52,6 +53,7 @@ export class ActivityQueryService {
     );
     return {
       ...profile,
+      spendDrawProgress: await this.activityProcessRepository.listSpendProgress?.(userId) ?? [],
       wallet,
       entitlements,
       ledger,

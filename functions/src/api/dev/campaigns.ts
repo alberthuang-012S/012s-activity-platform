@@ -39,3 +39,8 @@ export async function activateDevCampaign(
     sendError(response, error);
   }
 }
+
+export async function endDevCampaign(request: Request, response: Response, service: CampaignService, id: string): Promise<void> {
+  try { sendSuccess(response, await service.endCampaign(decodeURIComponent(id))); }
+  catch (error) { sendError(response, error); }
+}

@@ -3,31 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>012S Development Admin</title>
-    <link rel="stylesheet" href="/admin/admin.css" />
+    <title>012S 員工作業台</title>
+    <link rel="stylesheet" href="./admin.css" />
   </head>
   <body>
-    <main class="shell">
+    <aside class="sidebar"><a class="brand" href="#members">012S<span>2050 × 012S 會員平台</span></a><p class="nav-caption">工作空間</p><nav aria-label="主要功能"><a href="#members" data-page="members">◎　會員管理</a><a href="#orders" data-page="orders">▤　訂單作業</a><a href="#campaigns" data-page="campaigns">◇　消費活動</a><a href="#draws" data-page="draws">✧　發票抽獎與兌領</a><a href="#testing" data-page="testing">⚙　遊戲測試</a></nav><div class="sidebar-bottom">內部員工作業台<span>第一版 · 測試資料</span></div></aside><main class="shell">
       <header class="page-header">
         <div>
           <p class="eyebrow">2050 × 012S</p>
-          <h1>Development Admin</h1>
-          <p class="subtitle">Phase 2B Activity Engine / Wallet / Slot Backend 測試</p>
+          <h1 id="page-title">會員管理</h1>
+          <p class="subtitle">查詢會員、管理活動，掌握每一筆獎勵。</p>
         </div>
-        <span class="environment-badge">Development only</span>
+        <span class="environment-badge">內部測試環境</span>
       </header>
 
       <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
-      <section class="card">
+      <section class="card" id="member-directory" data-workspace="members"><div class="section-heading"><div><h2>會員名單</h2><p>搜尋最近 100 位會員，選取後查看餘額及建立測試訂單。</p></div><button id="refresh-members" class="secondary" type="button">重新整理</button></div><label>搜尋會員<input id="member-search" type="search" placeholder="輸入會員名稱或會員編號" /></label><p id="member-count" class="section-copy" aria-live="polite"></p><div class="table-wrap"><table><thead><tr><th>會員</th><th>狀態</th><th>建立日期</th><th>操作</th></tr></thead><tbody id="members-body"><tr><td colspan="4" class="empty">載入中…</td></tr></tbody></table></div></section><section class="card">
         <div class="section-heading">
           <div>
-            <h2>Campaign Management</h2>
-            <p>先建立 draft，再啟用活動。啟用後規則不可修改。</p>
+            <h2>活動管理</h2>
+            <p>兩類活動獨立設定，可同時上線多個活動。同筆訂單符合多個活動時，各活動分別計算並發放資格。</p>
           </div>
           <button id="refresh-campaigns" class="secondary" type="button">重新整理</button>
         </div>
         <form id="campaign-form">
+          <label>建立活動類型
+            <select id="campaign-category"><option value="product">購買商品抽獎活動（遊戲次數）</option><option value="cumulative_spend">累計消費抽獎活動</option></select>
+          </label>
           <label>
             活動名稱
             <input id="campaign-name" required value="2026 測試消費活動" />
@@ -42,23 +45,37 @@
               <input id="campaign-ends-at" type="datetime-local" required value="2026-12-31T23:59" />
             </label>
           </div>
+          <fieldset id="product-campaign-fields">
+          <legend>購買商品抽獎活動 → 遊戲次數</legend>
+          <label>商品 ID（多個以逗號分隔；與訂單商品 ID 完全相符）
+            <input id="campaign-product-ids" required value="PPA001" />
+          </label>
           <div class="form-row">
-            <label>
-              每滿多少元
-              <input id="campaign-threshold" type="number" min="1" step="1" required value="1000" />
+            <label>同筆訂單每買幾件指定商品
+              <input id="campaign-product-quantity" type="number" min="1" step="1" required value="1" />
             </label>
             <label>
-              SLOT_SPIN 增加
+              拉霸次數增加
               <input id="campaign-slot-grant" type="number" min="1" step="1" required value="1" />
             </label>
-            <label>
-              INVOICE_DRAW 增加
-              <input id="campaign-invoice-grant" type="number" min="1" step="1" required value="1" />
+          </div>
+          </fieldset>
+          <fieldset id="spend-campaign-fields" hidden disabled>
+          <legend>累計消費活動 → 獨立抽獎資格</legend>
+          <p class="section-copy">同一會員於本活動期間的已付款訂單跨單累積，未滿門檻金額保留。不增加遊戲或發票抽獎次數。</p>
+          <div class="form-row">
+            <label>累積每滿多少元
+              <input id="campaign-threshold" type="number" min="1" step="1" required value="1000" />
+            </label>
+            <label>增加幾份抽獎資格
+              <input id="campaign-spend-grant" type="number" min="1" step="1" required value="1" />
             </label>
           </div>
-          <button type="submit">建立 Campaign（draft）</button>
+          </fieldset>
+          <button type="submit">建立活動草稿</button>
         </form>
         <pre id="campaign-result" class="result" aria-live="polite"></pre>
+        <label>查看活動類型<select id="campaign-filter"><option value="all">全部活動</option><option value="product">購買商品抽獎活動</option><option value="cumulative_spend">累計消費活動</option><option value="legacy">既有混合活動</option></select></label>
         <div class="table-wrap">
           <table>
             <thead>
@@ -86,7 +103,7 @@
               <input id="display-name" name="displayName" required value="測試會員 A" />
             </label>
             <label>
-              External Customer ID
+              外部會員編號
               <input id="external-customer-id" name="externalCustomerId" required value="TEST-CUSTOMER-001" />
             </label>
             <button type="submit">建立測試會員</button>
@@ -95,27 +112,27 @@
         </article>
 
         <article class="card">
-          <h2>Development Session / Wallet</h2>
+          <h2>會員測試連線</h2>
           <form id="session-form">
             <label>
-              User ID
+              會員編號
               <input id="session-user-id" required placeholder="USR_..." />
             </label>
-            <button type="submit">建立 Development Session</button>
+            <button type="submit">建立測試連線</button>
           </form>
           <pre id="session-result" class="result" aria-live="polite"></pre>
           <div class="inline-actions">
-            <button id="load-wallet" class="secondary" type="button">GET /api/me/wallet</button>
+            <button id="load-wallet" class="secondary" type="button">查詢會員餘額</button>
           </div>
           <pre id="wallet-result" class="result" aria-live="polite"></pre>
         </article>
       </section>
 
       <section class="card">
-        <h2>Slot Backend Test</h2>
-        <p class="section-copy">使用目前 Development Session 呼叫 Server-side weighted random Slot API。</p>
+        <h2>拉霸遊戲測試</h2>
+        <p class="section-copy">每次遊戲使用 1 次資格。完成後會顯示獲得點數，並自動更新會員餘額。</p>
         <form id="slot-test-form">
-          <button type="submit">POST /api/games/slot/spin</button>
+          <button type="submit">執行一次拉霸</button>
         </form>
         <pre id="slot-test-result" class="result" aria-live="polite"></pre>
       </section>
@@ -123,7 +140,7 @@
       <section class="card">
         <div class="section-heading">
           <div>
-            <h2>Invoice Draw Bonus（Phase 3A）</h2>
+            <h2>發票抽獎管理</h2>
             <p>建立發票額外抽獎活動、設定獎池，並以 Development Session 測試抽獎與兌領流程。</p>
           </div>
           <button id="refresh-invoice-draw" class="secondary" type="button">重新整理</button>
@@ -146,7 +163,7 @@
                   <input id="invoice-draw-campaign-ends-at" type="datetime-local" required value="2026-12-31T23:59" />
                 </label>
               </div>
-              <button type="submit">建立 Invoice Draw Campaign</button>
+              <button type="submit">建立抽獎活動</button>
             </form>
             <pre id="invoice-draw-campaign-result" class="result" aria-live="polite"></pre>
           </article>
@@ -232,7 +249,7 @@
             <p class="section-copy">沿用上方建立的 Development Session；結果與扣除動作由 Server Transaction 決定。</p>
             <div class="inline-actions">
               <button id="invoice-draw-status" class="secondary" type="button">查詢抽獎狀態</button>
-              <button id="invoice-draw-test" type="button">POST /api/games/invoice-draw/draw</button>
+              <button id="invoice-draw-test" type="button">執行一次抽獎</button>
             </div>
             <pre id="invoice-draw-result" class="result" aria-live="polite"></pre>
           </article>
@@ -250,7 +267,7 @@
         </div>
 
         <article>
-          <h3>Pending Manual Prize Claims</h3>
+          <h3>待兌領獎品</h3>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Claim</th><th>User</th><th>Prize</th><th>Status</th><th>Action</th></tr></thead>
@@ -267,11 +284,11 @@
           <h2>建立測試訂單</h2>
           <form id="order-form">
             <label>
-              External Order ID
+              外部訂單編號
               <input id="external-order-id" name="externalOrderId" required value="TEST-ORDER-001" />
             </label>
             <label>
-              會員 External Customer ID
+              會員 外部會員編號
               <input id="order-customer-id" name="externalCustomerId" required value="TEST-CUSTOMER-001" />
             </label>
             <label>
@@ -317,16 +334,16 @@
                 <input id="invoice-number" name="invoiceNumber" value="MOCK-INV-001" />
               </label>
             </div>
-            <button type="submit">建立 Mock Order</button>
+            <button type="submit">建立測試訂單</button>
           </form>
           <pre id="order-result" class="result" aria-live="polite"></pre>
         </article>
 
         <article class="card">
-          <h2>會員 Wallet / Activity Ledger</h2>
+          <h2>會員餘額與異動紀錄</h2>
           <form id="profile-form">
             <label>
-              User ID
+              會員編號
               <input id="profile-user-id" required placeholder="USR_..." />
             </label>
             <button type="submit">查看會員活動資料</button>
@@ -339,7 +356,7 @@
         <div class="section-heading">
           <div>
             <h2>最近訂單</h2>
-            <p>資料來自 Cloud Function → Order Processor → Activity Engine → Firestore。</p>
+            <p>查看最近訂單的付款狀態與獎勵發放情況。</p>
           </div>
           <button id="refresh-orders" class="secondary" type="button">重新整理</button>
         </div>
@@ -347,8 +364,8 @@
           <table>
             <thead>
               <tr>
-                <th>Order ID</th>
-                <th>External Order ID</th>
+                <th>訂單編號</th>
+                <th>外部訂單編號</th>
                 <th>User</th>
                 <th>Amount</th>
                 <th>Status</th>
@@ -364,24 +381,26 @@
       </section>
 
       <section class="card">
-        <h2>Order Activity Detail</h2>
+        <h2>訂單獎勵明細</h2>
         <form id="order-detail-form">
           <label>
-            Order ID
+            訂單編號
             <input id="detail-order-id" required placeholder="ORD_..." />
           </label>
           <div class="inline-actions">
-            <button type="submit">查看 Order Activity</button>
-            <button id="reprocess-activity" class="secondary" type="button">重新處理 Activity</button>
+            <button type="submit">查看獎勵明細</button>
+            <button id="reprocess-activity" class="secondary" type="button">重新處理獎勵</button>
           </div>
         </form>
         <pre id="order-detail-result" class="result" aria-live="polite"></pre>
       </section>
 
       <footer>
-        Development Admin 僅供受控測試，可驗證 Phase 2B Slot Backend 與 Phase 3A Invoice Draw；不包含 SHOPLINE、退款回收、正式會員登入或其他遊戲。
+        012S 內部測試環境 · 目前使用測試會員與訂單，尚未串接正式商城。
       </footer>
     </main>
-    <script src="/admin/admin.js" defer></script>
+    <script src="./admin.js" defer></script>
+    <script src="./workspace.js" defer></script>
+    <script src="./staff-results.js" defer></script>
   </body>
 </html>

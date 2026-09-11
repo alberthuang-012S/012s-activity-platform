@@ -45,8 +45,18 @@ export interface ActivityEngineDependencies {
 
 export function evaluateRules(order: Order, rules: ActivityRule[]): ActivityGrant[] {
   const grants: ActivityGrant[] = [];
+  if (order.status !== "paid" || !order.paidAt) return grants;
   for (const rule of rules) {
     if (!rule.enabled) {
+      continue;
+    }
+    if (rule.type === "CUMULATIVE_SPEND") continue;
+
+    if (rule.type === "PRODUCT_QUANTITY") {
+      const eligibleQuantity = order.items.reduce((total, item) =>
+        total + (rule.productIds.includes(item.productId) ? item.quantity : 0), 0);
+      const quantity = Math.floor(eligibleQuantity / rule.requiredQuantity) * rule.grantQuantity;
+      if (quantity > 0) grants.push({ ruleId: rule.id, type: rule.entitlementType, quantity });
       continue;
     }
 
@@ -110,6 +120,9 @@ export class ActivityEngineService implements ActivityEngine {
           orderId: order.id,
           userId: order.userId,
           campaignId: campaign.id,
+          cumulativeSpend: rules.filter((rule): rule is import("../domain/activity/activity.types").CumulativeSpendRule => rule.type === "CUMULATIVE_SPEND" && rule.enabled)
+            .map(rule => ({ ruleId: rule.id, thresholdAmount: rule.thresholdAmount,
+              grantQuantity: rule.grantQuantity, amount: order.amount.total })),
           grants: grants.map((grant) => ({
             entitlementId: createActivityEntitlementId(processId, grant.ruleId),
             ledgerId: createActivityLedgerId(processId, grant.ruleId),

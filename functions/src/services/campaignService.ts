@@ -32,6 +32,11 @@ export class CampaignService {
     return this.campaignRepository.activateCampaign(campaignId);
   }
 
+  async endCampaign(campaignId: string): Promise<Campaign> {
+    if (!this.campaignRepository.endCampaign) throw new ApplicationError("CAMPAIGN_IMMUTABLE", "Ending campaigns is unavailable.");
+    return this.campaignRepository.endCampaign(campaignId);
+  }
+
   async listRules(campaignId: string): Promise<ActivityRule[]> {
     return this.campaignRepository.listRulesForCampaign(campaignId);
   }

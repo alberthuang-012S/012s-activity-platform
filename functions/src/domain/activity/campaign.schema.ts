@@ -11,6 +11,7 @@ import { isRecord } from "../../utils/validation";
 export interface CreateCampaignCommand {
   name: string;
   type: CampaignType;
+  category?: import("./campaign.types").CampaignCategory;
   timezone: string;
   startsAt: string;
   endsAt: string;
@@ -69,6 +70,30 @@ function parseRule(value: unknown, index = 0): NewActivityRule {
     invalidRule(`rules[${index}] must be an object.`);
   }
 
+  if (value.type === "CUMULATIVE_SPEND") {
+    return { type: "CUMULATIVE_SPEND",
+      thresholdAmount: positiveInteger(value.thresholdAmount, "thresholdAmount"),
+      grantQuantity: positiveInteger(value.grantQuantity, "grantQuantity"),
+      enabled: enabledValue(value.enabled, "enabled") };
+  }
+
+  if (value.type === "PRODUCT_QUANTITY") {
+    if (value.entitlementType !== undefined && value.entitlementType !== "SLOT_SPIN") {
+      invalidRule("PRODUCT_QUANTITY entitlementType must be SLOT_SPIN.");
+    }
+    if (!Array.isArray(value.productIds) || value.productIds.length === 0 || value.productIds.length > 100 ||
+        value.productIds.some(id => typeof id !== "string" || !id.trim())) {
+      invalidRule("productIds must contain 1 to 100 non-empty product IDs.");
+    }
+    return {
+      type: "PRODUCT_QUANTITY", entitlementType: "SLOT_SPIN",
+      productIds: [...new Set((value.productIds as string[]).map(id => id.trim()))],
+      requiredQuantity: positiveInteger(value.requiredQuantity, "requiredQuantity"),
+      grantQuantity: positiveInteger(value.grantQuantity, "grantQuantity"),
+      enabled: enabledValue(value.enabled, "enabled")
+    };
+  }
+
   if (value.type === "ORDER_TOTAL_MULTIPLE") {
     if (value.entitlementType !== undefined && value.entitlementType !== "SLOT_SPIN") {
       invalidRule("ORDER_TOTAL_MULTIPLE entitlementType must be SLOT_SPIN.");
@@ -96,7 +121,7 @@ function parseRule(value: unknown, index = 0): NewActivityRule {
     return rule;
   }
 
-  invalidRule(`rules[${index}].type must be ORDER_TOTAL_MULTIPLE or VALID_INVOICE.`);
+  invalidRule(`rules[${index}].type must be PRODUCT_QUANTITY, ORDER_TOTAL_MULTIPLE or VALID_INVOICE.`);
 }
 
 function rulesFromConvenienceFields(input: Record<string, unknown>): NewActivityRule[] {
@@ -156,8 +181,18 @@ export function parseCreateCampaignCommand(input: unknown): CreateCampaignComman
     rules = rulesFromConvenienceFields(input);
   }
 
+  const category = input.category;
+  if (category !== undefined) {
+    if (category !== "product" && category !== "cumulative_spend") invalidCampaign("Invalid campaign category.");
+    const expected = category === "product" ? "PRODUCT_QUANTITY" : "CUMULATIVE_SPEND";
+    if (rules.length === 0 || rules.some(rule => rule.type !== expected)) {
+      invalidCampaign("Campaign rules must match its category.");
+    }
+  }
+
   return {
     name,
+    ...(category === undefined ? {} : { category }),
     type: "purchase",
     timezone,
     startsAt,
